@@ -15,7 +15,7 @@ A lightweight, pure Python implementation of Hierarchical Temporal Memory (HTM) 
 - Spatial Pooler & Temporal Memory
 - Combined `HTMModel` object for end-to-end streaming
 - YAML configuration support for pipeline control
-- Compatible with `htm_wl_demo` and similar real-time systems
+- Compatible with low latency real-time systems
 
 ## Installation
 

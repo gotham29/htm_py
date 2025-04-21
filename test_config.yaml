@@ -1,14 +1,14 @@
 features:
   ROLL_STICK:
     encoder: scalar
-    min: -1.0
-    max: 1.0
+    minval: -1.0
+    maxval: 1.0
     n: 100
     w: 21
-  PITCH_STICK:
+  PITCH_STIC:
     encoder: scalar
-    min: -1.0
-    max: 1.0
+    minval: -1.0
+    maxval: 1.0
     n: 100
     w: 21
 
