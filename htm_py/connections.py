@@ -1,27 +1,114 @@
-import logging
-from collections import defaultdict
-from dataclasses import dataclass
+# from collections import defaultdict
 
-logger = logging.getLogger(__name__)
-
-# @dataclass
-# class Synapse:
-#     presynapticCell: int
-#     permanence: float
-
-class Synapse:
-    def __init__(self, presynaptic_cell, permanence):
-        self.presynaptic_cell = presynaptic_cell
-        self.permanence = permanence
 
 # class Segment:
-#     _id_counter = 0
+#     def __init__(self, id):
+#         self.id = id
 
-#     def __init__(self, cell):
-#         self.cell = cell
-#         self.synapses = []
-#         self.id = Segment._id_counter
-#         Segment._id_counter += 1
+#     def __hash__(self):
+#         return hash(self.id)
+
+#     def __eq__(self, other):
+#         return self.id == other.id
+
+
+# class Synapse:
+#     def __init__(self, presynaptic_cell, permanence):
+#         self.presynaptic_cell = presynaptic_cell
+#         self.permanence = permanence
+
+
+# class Connections:
+#     def __init__(self, num_cells, maxSegmentsPerCell=None, maxSynapsesPerSegment=None):
+#         self.num_cells = num_cells
+#         self.maxSegmentsPerCell = maxSegmentsPerCell
+#         self.maxSynapsesPerSegment = maxSynapsesPerSegment
+#         self._next_segment_id = 0
+
+#         self._segment_to_synapses = defaultdict(list)
+#         self._segment_owner = {}  # segment -> cell
+#         self._cell_to_segments = defaultdict(list)  # cell -> [segments]
+
+#     def create_segment(self, cell):
+#         segments = self._cell_to_segments[cell]
+#         if self.maxSegmentsPerCell is not None and len(segments) >= self.maxSegmentsPerCell:
+#             oldest = segments.pop(0)  # ✅ enforce FIFO for segment eviction
+#             self.destroy_segment(oldest)
+
+#         segment = Segment(self._next_segment_id)
+#         self._next_segment_id += 1
+#         self._segment_owner[segment] = cell
+#         self._cell_to_segments[cell].append(segment)
+#         self._segment_to_synapses[segment] = []
+#         return segment
+
+#     def destroy_segment(self, segment):
+#         cell = self._segment_owner.pop(segment, None)
+#         if cell is not None:
+#             if segment in self._cell_to_segments[cell]:
+#                 self._cell_to_segments[cell].remove(segment)
+#         self._segment_to_synapses.pop(segment, None)
+
+#     def segments_for_cell(self, cell):
+#         return list(self._cell_to_segments.get(cell, []))  # ✅ Return copy to avoid external mutation
+
+#     def cell_for_segment(self, segment):
+#         return self._segment_owner[segment]
+
+#     def create_synapse(self, segment, presynaptic_cell, permanence):
+#         synapses = self._segment_to_synapses[segment]
+#         if self.maxSynapsesPerSegment is not None and len(synapses) >= self.maxSynapsesPerSegment:
+#             # ✅ prune weakest to make room
+#             to_remove = sorted(synapses, key=lambda s: s.permanence)[:len(synapses) - self.maxSynapsesPerSegment + 1]
+#             for s in to_remove:
+#                 self.destroy_synapse(s)
+
+#         synapse = Synapse(presynaptic_cell, permanence)
+#         self._segment_to_synapses[segment].append(synapse)
+#         return synapse
+
+#     def destroy_synapse(self, synapse_to_remove):
+#         for seg, syns in self._segment_to_synapses.items():
+#             if synapse_to_remove in syns:
+#                 syns.remove(synapse_to_remove)
+#                 # ✅ If segment is now empty, destroy it
+#                 if not syns:
+#                     self.destroy_segment(seg)
+#                 return
+
+#     def synapses_for_segment(self, segment):
+#         return list(self._segment_to_synapses.get(segment, []))
+
+#     def num_synapses(self, segment):
+#         return len(self._segment_to_synapses.get(segment, []))
+
+#     def data_for_synapse(self, synapse):
+#         return synapse
+
+#     def update_permanence(self, synapse, new_perm):
+#         synapse.permanence = new_perm
+
+#     def permanence(self, synapse):
+#         return synapse.permanence
+
+#     def presynaptic_cell(self, synapse):
+#         return synapse.presynaptic_cell
+
+#     def num_active_connected_synapses(self, segment, active_cells, connected_perm):
+#         return sum(
+#             1 for s in self._segment_to_synapses.get(segment, [])
+#             if s.presynaptic_cell in active_cells and s.permanence >= connected_perm
+#         )
+
+#     def num_active_potential_synapses(self, segment, active_cells):
+#         return sum(
+#             1 for s in self._segment_to_synapses.get(segment, [])
+#             if s.presynaptic_cell in active_cells
+#         )
+
+
+
+from collections import defaultdict
 
 class Segment:
     def __init__(self, id):
@@ -33,153 +120,123 @@ class Segment:
     def __eq__(self, other):
         return self.id == other.id
 
+class Synapse:
+    def __init__(self, presynaptic_cell, permanence):
+        self.presynaptic_cell = presynaptic_cell
+        self.permanence = permanence
+
 class Connections:
-    # def __init__(self, defaultPerm=0.21):
-    #     self._segments = defaultdict(list)  # cell -> set of segments
-    #     self._active_segments = set()
-    #     self._segment_id_counter = 0
-    #     self.defaultPerm = defaultPerm
-
-    def __init__(self, num_cells, defaultPerm=0.21):
+    def __init__(self, num_cells, maxSegmentsPerCell=None, maxSynapsesPerSegment=None):
         self.num_cells = num_cells
-        self._segment_to_synapses = defaultdict(list)
-        self._segment_owner = {}  # segment → cell
-        self._cell_to_segments = defaultdict(list)
+        self.maxSegmentsPerCell = maxSegmentsPerCell
+        self.maxSynapsesPerSegment = maxSynapsesPerSegment
+
         self._next_segment_id = 0
-        self._next_synapse_id = 0
-        self._segments = defaultdict(list)  # cell -> set of segments
-        self._active_segments = set()
-        self._segment_id_counter = 0
-        self.defaultPerm = defaultPerm
+        self._segment_to_synapses = defaultdict(list)
+        self._segment_owner = {}
+        self._cell_to_segments = defaultdict(list)
 
+    def create_segment(self, cell, last_used_map=None, current_iter=None):
+        segments = self._cell_to_segments[cell]
+        
+        if self.maxSegmentsPerCell is not None and len(segments) >= self.maxSegmentsPerCell:
+            # Find LRU segment
+            if last_used_map is not None and current_iter is not None:
+                oldest_seg = min(
+                    segments,
+                    key=lambda s: last_used_map.get(s, -1)
+                )
+                print(f"[destroySegment] Destroying LRU segment {oldest_seg.id} on cell {cell}")
+                self.destroy_segment(oldest_seg)
+            else:
+                # Fall back to FIFO if no iteration info
+                print(f"[destroySegment] Destroying first segment (FIFO) on cell {cell}")
+                self.destroy_segment(segments[0])
 
-    def create_segment(self, cell, presynapticCells=None, initialPermanence=0.21, maxNewSynapseCount=None):
-        presynapticCells = presynapticCells or []
-        # segment = Segment(cell)
-        # segment.id = self._segment_id_counter
-        # self._segment_id_counter += 1
-        # self._segments[cell].append(segment)
         segment = Segment(self._next_segment_id)
         self._next_segment_id += 1
         self._segment_owner[segment] = cell
         self._cell_to_segments[cell].append(segment)
         self._segment_to_synapses[segment] = []
-
-        if presynapticCells:
-            self.grow_synapses(
-                segment,
-                presynapticCells,
-                initialPermanence,
-                max_new_synapses=maxNewSynapseCount
-            )
-
+        
+        print(f"[createSegment] Created segment {segment.id} for cell {cell}")
         return segment
 
-    def grow_synapses(self, segment, presynaptic_cells, initial_permanence, max_new_synapses=None):
-        """
-        Add new synapses from the given presynaptic cells to this segment.
-        Only adds synapses to presynaptic cells not already connected.
-        Limits the number to `max_new_synapses` if specified.
-        """
-        existing_presyn = {syn.presynapticCell for syn in segment.synapses}
-        candidates = [cell for cell in sorted(presynaptic_cells) if cell not in existing_presyn]
+    # def create_segment(self, cell):
+    #     segments = self._cell_to_segments[cell]
+    #     if self.maxSegmentsPerCell is not None and len(segments) >= self.maxSegmentsPerCell:
+    #         oldest = segments[0]
+    #         self.destroy_segment(oldest)
 
-        if max_new_synapses is not None:
-            candidates = candidates[:max_new_synapses]
+    #     segment = Segment(self._next_segment_id)
+    #     self._next_segment_id += 1
+    #     self._segment_owner[segment] = cell
+    #     self._cell_to_segments[cell].append(segment)
+    #     self._segment_to_synapses[segment] = []
 
-        for cell in candidates:
-            self.create_synapse(segment, cell, initial_permanence)
+    #     return segment
 
-    # def create_synapse(self, segment, presynapticCell, permanence):
-    #     synapse = Synapse(presynapticCell, permanence)
-    #     segment.synapses.append(synapse)
-    #     return synapse
-
-    def create_synapse(self, segment, presynaptic_cell, permanence):
-        synapse = Synapse(presynaptic_cell, permanence)
-        self._segment_to_synapses[segment].append(synapse)
-        return synapse
+    def destroy_segment(self, segment):
+        cell = self._segment_owner.pop(segment, None)
+        if cell is not None:
+            segs = self._cell_to_segments[cell]
+            if segment in segs:
+                segs.remove(segment)
+            if not segs:
+                del self._cell_to_segments[cell]
+        if segment in self._segment_to_synapses:
+            del self._segment_to_synapses[segment]
 
     def segments_for_cell(self, cell):
-        return self._segments[cell]
-
-    def segment_overlap(self, segment, activity_set, connected_only=False, permanence_connected=0.0):
-        overlap = 0
-        for syn in segment.synapses:
-            if connected_only and syn.permanence < permanence_connected:
-                continue
-            if syn.presynapticCell in activity_set:
-                overlap += 1
-        return overlap
+        return self._cell_to_segments.get(cell, [])
 
     def cell_for_segment(self, segment):
-        return segment.cell
+        return self._segment_owner[segment]
 
-    def get_active_segments(self):
-        return list(self._active_segments)
+    def create_synapse(self, segment, presynaptic_cell, permanence):
+        synapses = self._segment_to_synapses[segment]
+        if self.maxSynapsesPerSegment is not None and len(synapses) >= self.maxSynapsesPerSegment:
+            # Remove the lowest permanence synapse to make room
+            weakest = min(synapses, key=lambda s: s.permanence, default=None)
+            if weakest:
+                synapses.remove(weakest)
 
-    def mark_segment_active(self, segment):
-        self._active_segments.add(segment)
+        synapse = Synapse(presynaptic_cell, permanence)
+        synapses.append(synapse)
+        return synapse
 
-    def clear_active_segments(self):
-        self._active_segments.clear()
-
-    def allCells(self):
-        return list(self._segments.keys())
-
-    def adapt_segment(self, segment, prevWinnerCells, positive_reinforcement, perm_inc=0.1, perm_dec=0.1):
-        for synapse in segment.synapses:
-            if synapse.presynapticCell in prevWinnerCells:
-                if positive_reinforcement:
-                    synapse.permanence = min(1.0, synapse.permanence + perm_inc)
-                else:
-                    synapse.permanence = max(0.0, synapse.permanence - perm_dec)
-            else:
-                if positive_reinforcement:
-                    synapse.permanence = max(0.0, synapse.permanence - perm_dec)
-
-    def clear_active_segments(self):
-        # Stub — not needed for basic tests
-        pass
-
-    def get_active_segments(self):
-        # Stub — not needed for basic tests
-        return []
-
-    def segments(self):
-        return [segment for segment_list in self._segments.values() for segment in segment_list]
+    def destroy_synapse(self, synapse):
+        for syns in self._segment_to_synapses.values():
+            if synapse in syns:
+                syns.remove(synapse)
+                break
 
     def synapses_for_segment(self, segment):
-        """
-        Return a list of synapse objects for the given segment.
-        """
         return self._segment_to_synapses.get(segment, [])
 
-    # def num_active_connected_synapses(self, segment, active_cells, connected_perm):
-    #     """
-    #     Count number of synapses on `segment` whose presynaptic cell is in `active_cells`
-    #     and whose permanence is >= connected_perm.
-    #     """
-    #     count = 0
-    #     for syn in self.synapses_for_segment(segment):
-    #         if syn.presynapticCell in active_cells and syn.permanence >= connected_perm:
-    #             count += 1
-    #     return count
-    
+    def num_synapses(self, segment):
+        return len(self._segment_to_synapses.get(segment, []))
+
+    def data_for_synapse(self, synapse):
+        return synapse
+
+    def update_permanence(self, synapse, new_perm):
+        synapse.permanence = new_perm
+
+    def permanence(self, synapse):
+        return synapse.permanence
+
+    def presynaptic_cell(self, synapse):
+        return synapse.presynaptic_cell
+
     def num_active_connected_synapses(self, segment, active_cells, connected_perm):
-        """
-        Count number of synapses on `segment` whose presynaptic cell is in `active_cells`
-        and whose permanence is >= connected_perm.
-        """
         return sum(
             1 for s in self.synapses_for_segment(segment)
             if s.presynaptic_cell in active_cells and s.permanence >= connected_perm
         )
 
-    def clear(self):
-        """Reset all internal state of the Connections (for test setup)."""
-        self._segments.clear()
-        self._active_segments.clear()
-        self._nextSegmentId = 0
-        self._nextSynapseId = 0
-        self._segment_id_counter = 0
+    def num_active_potential_synapses(self, segment, active_cells):
+        return sum(
+            1 for s in self.synapses_for_segment(segment)
+            if s.presynaptic_cell in active_cells
+        )
