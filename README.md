@@ -1,41 +1,74 @@
 # htm_py
 
-A lightweight, pure Python implementation of Hierarchical Temporal Memory (HTM) for anomaly detection and entropy analysis of streaming numerical data. Designed for future-proof, production-ready use — no C++ build tools required.
+A pure-Python, production-ready Hierarchical Temporal Memory (HTM) library.
 
-## Goals
+## Overview
 
-- Recreate the essential functionality of `htm.core` in Python 3+
-- Validate outputs against historical Numenta benchmarks (e.g., NAB)
-- Support a flexible config-based modeling interface
-- Measure both anomaly scores and model ambiguity via prediction count
+`htm_py` implements key components of HTM theory:
+- **Encoders** (RDSE and DateEncoder)
+- **Spatial Pooler**
+- **Temporal Memory**
+- **Anomaly Score**
+- **Anomaly Likelihood**
+- **Prediction Count**
 
-## Key Features
-
-- Scalar + datetime encoders
-- Spatial Pooler & Temporal Memory
-- Combined `HTMModel` object for end-to-end streaming
-- YAML configuration support for pipeline control
-- Compatible with low latency real-time systems
+The library is engineered for:
+- Faithfulness to Numenta’s NAB benchmark
+- Python 3.x compatibility
+- No C++ dependencies
+- Lightweight, modular, and highly extensible
 
 ## Installation
 
 ```bash
-git clone https://github.com/gotham29/htm_py.git
-cd htm_py
-pip install .
+pip install -r requirements.txt
 ```
 
-## Usage
+(Requirements are minimal — mainly `numpy`, `scipy`, and `pytest`.)
 
-Example:
+## How to Run
 
-```python
-from htm_py import HTMModel
+Run NAB comparison:
 
-model = HTMModel(config_path="my_model_config.yaml")
-model.update(input_dict)
+```bash
+python nab_tm_runner.py
 ```
 
-## License
+Run full unit tests:
 
-MIT License
+```bash
+pytest tests
+```
+
+## Repository Structure
+
+```
+htm_py/
+    connections.py
+    date_encoder.py
+    rdse_encoder.py
+    spatial_pooler.py
+    temporal_memory.py
+    htm_model.py
+tests/
+    test_connections.py
+    test_temporal_memory.py
+    test_encoders.py
+    test_htm_model.py
+data/
+    art_daily_jumpsup.csv
+nab_tm_runner.py
+requirements.txt
+pytest.ini
+README.md
+```
+
+## Notes
+
+- `htm_py` matches Numenta NAB outputs **to machine precision** (anomaly scores & likelihoods).
+- Designed to be easily extendable for production use cases.
+- 100% Python, no need for htm.core, pycapnp, or old nupic bindings.
+
+---
+
+Built with ❤️ for robust, biologically inspired AI systems.
