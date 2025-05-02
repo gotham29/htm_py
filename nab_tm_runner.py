@@ -29,7 +29,7 @@ model = HTMModel(
         "seed": 42
     },
     tm_params = {
-        "numColumns": 2048,
+        "columnDimensions": (2048,),
         "cellsPerColumn": 32,
         "activationThreshold": 12,
         "initialPermanence": 0.21,

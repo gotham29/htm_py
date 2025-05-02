@@ -17,21 +17,9 @@ class HTMModel:
             seed=seed,
         )
 
-        # Setup TM using the same n and w as the encoder
-        # self.n_columns = enc_params.get("n", 2048)
-        # self.cells_per_column = tm_params.get("cellsPerColumn", 32)
-        # total_cells = self.n_columns * self.cells_per_column
-
-        # # Setup Connections
-        # self.connections = Connections(
-        #     num_cells=total_cells,
-        # )
-
         # Setup TM
         self.tm = TemporalMemory(
             **tm_params
-        #     connections=self.connections,
-        #     params=tm_params,
         )
 
     def compute(self, record, learn=True, verbose=False):
@@ -40,7 +28,7 @@ class HTMModel:
         timestamp = record["timestamp"] if isinstance(record, dict) else None
 
         # Encode input
-        sdr = self.encoder.encode(value) #self.dateencoder.encode(timestamp)
+        sdr = self.encoder.encode(value) # + self.dateencoder.encode(timestamp)
 
         # Active columns are simply the indices of True bits in the SDR
         active_columns = np.flatnonzero(sdr)
