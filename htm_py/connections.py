@@ -53,6 +53,9 @@ class Connections:
     def synapses_for_segment(self, segment):
         return list(segment.synapses)
 
+    def num_synapses(self, segment):
+        return len(self.synapses_for_segment(segment))
+
     def get_cell_for_segment(self, segment):
         return self._segment_to_cell.get(segment, None)
 
