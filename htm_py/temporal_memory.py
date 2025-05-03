@@ -1,5 +1,5 @@
+import math
 import random
-from typing import List
 from htm_py.connections import Connections
 
 
@@ -25,11 +25,7 @@ class TemporalMemory:
         self.numColumns = columnDimensions[0]
         self.numCells = self.numColumns * self.cellsPerColumn
 
-        self.connections = Connections(
-            num_cells=self.numCells,
-            maxSegmentsPerCell=maxSegmentsPerCell,
-            maxSynapsesPerSegment=maxSynapsesPerSegment
-        )
+        self.connections = Connections(self.numCells)
 
         self.activationThreshold = activationThreshold
         self.initialPermanence = initialPermanence
@@ -37,6 +33,8 @@ class TemporalMemory:
         self.minThreshold = minThreshold
         self.encoderWidth = encoderWidth
         self.maxNewSynapseCount = maxNewSynapseCount
+        self.maxSegmentsPerCell = maxSegmentsPerCell
+        self.maxSynapsesPerSegment = maxSynapsesPerSegment
         self.permanenceIncrement = permanenceIncrement
         self.permanenceDecrement = permanenceDecrement
         self.predictedSegmentDecrement = predictedSegmentDecrement
@@ -72,59 +70,6 @@ class TemporalMemory:
 
         # ✅ Final step: preserve state for next timestep
         self._update_state()
-
-
-    # def compute(self, activeColumns, learn):
-    #     self.iteration += 1
-    #     self.learn = learn
-    #     self.active_columns = activeColumns
-
-    #     self._burst_columns(activeColumns)
-    #     if learn:
-    #         self._learn_segments(activeColumns)
-    #     self._predict_cells()
-    #     self._calculate_anomaly_score(activeColumns)
-    #     self._calculate_prediction_count()
-        
-    #     # ✅ Final step: preserve state for next timestep
-    #     self._update_state()
-
-
-    # def compute(self, activeColumns, learn):
-    #     # ✅ Use previous step’s state for learning
-    #     prev_predictive_cells = set(self.get_predictive_cells())
-
-    #     # These will be used for adaptation/growth logic
-    #     prevActiveCells = self.prevActiveCells
-    #     prevWinnerCells = self.prevWinnerCells
-
-    #     # Reset current state
-    #     self.activeCells = []
-    #     self.winnerCells = []
-
-    #     self._activate_cells(activeColumns, prevActiveCells, prevWinnerCells, learn)
-
-    #     new_predictive = self._activate_dendrites()
-    #     if learn:
-    #         self.predictiveCells = new_predictive
-    #         self._learn_segments(activeColumns)
-
-    #     self.iteration += 1
-
-    #     # ✅ Save current as previous for next step
-    #     self.prevActiveCells = set(self.activeCells)
-    #     self.prevWinnerCells = set(self.winnerCells)
-
-    #     print(f"[TM] Iteration: {self.iteration}, Num active cols: {len(activeColumns)}, Learn: {learn}")
-    #     print(f"[TM] Num winner cells: {len(self.winnerCells)}, Num active cells: {len(self.activeCells)}")
-    #     if not learn:
-    #         print(f"[TM-DIAG] During inference. Active={self.activeCells} Pred={prev_predictive_cells}")
-    #     if self.get_predictive_cells():
-    #         print(f"[PREDICT] Predictive cells at t+1: {self.get_predictive_cells()}")
-    #     print(f"[WINNER] Iter={self.iteration} → {self.winnerCells}")
-
-    #     self._update_state()
-    #     return self._calculate_anomaly_score(prev_predictive_cells), self._calculate_prediction_count(prev_predictive_cells)
 
     def _activate_dendrites(self):
         self.activeSegments = []
@@ -164,6 +109,31 @@ class TemporalMemory:
                     seg = self.connections.create_segment(cell)
                     self._connect_new_synapses(seg, prev_active, self.initialPermanence)
                     print(f"[LEARN] Created new segment on winner cell {cell} for col {col} with synapses to {prev_active}")
+
+    def _adapt_segment(self, segment, prevActiveCells, perm_inc, perm_dec):
+        """
+        Reinforce or punish synapses on the given segment depending on whether
+        their presynaptic cells were active in the previous timestep.
+        """
+        synapses = self.connections.synapses_for_segment(segment)
+        seen_presyn_cells = {self.connections.presynaptic_cell(s) for s in synapses}
+
+        for s in synapses[:]:  # Copy for safe iteration
+            cell = self.connections.presynaptic_cell(s)
+            perm = self.connections.permanence(s)
+            perm += perm_inc if cell in prevActiveCells else -perm_dec
+            perm = max(0.0, min(1.0, perm))
+            if perm < 1e-6:
+                self.connections.destroy_synapse(s)
+            else:
+                self.connections.update_permanence(s, perm)
+
+        # Add new synapses to active cells that were missing before
+        new_syn_cells = set(prevActiveCells) - seen_presyn_cells
+        if new_syn_cells:
+            self.connections.add_synapses(segment, list(new_syn_cells),
+                                        self.initialPermanence,
+                                        self.maxNewSynapseCount)
 
     def _activate_cells(self, activeColumns, prevActiveCells, prevWinnerCells, learn):
         for col in sorted(set(activeColumns)):
@@ -206,71 +176,6 @@ class TemporalMemory:
             if not self.connections.synapses_for_segment(best_segment):
                 self.connections.destroy_segment(best_segment)
 
-    # def _activate_predicted_column(self, segments, prevActiveCells, prevWinnerCells, learn):
-    #     # print(f"[BURST] col={col} winner_cell={winner_cell}")
-    #     for seg in segments:
-    #         cell = self.connections.cell_for_segment(seg)
-    #         self.activeCells.append(cell)
-    #         self.winnerCells.append(cell)
-    #         if learn:
-    #             self._adapt_segment(seg, prevActiveCells)
-    #             n_desired = self.maxNewSynapseCount - self.connections.num_active_potential_synapses(seg, prevActiveCells)
-    #             if n_desired > 0 and prevWinnerCells:
-    #                 self._grow_synapses(seg, prevWinnerCells, n_desired)
-
-    #             # Cleanup empty segments
-    #             if not self.connections.synapses_for_segment(seg):
-    #                 self.connections.destroy_segment(seg)
-
-    # def _burst_column(self, col, matchingSegments, prevActiveCells, prevWinnerCells, learn):        
-    #     cells = self.cells_for_column(col)
-    #     self.activeCells.extend(cells)
-
-    #     if matchingSegments:
-    #         best_segment = max(matchingSegments, key=lambda x: x[1])[0]
-    #         winner_cell = self.connections.cell_for_segment(best_segment)
-    #         # print(f"[burstColumn] MATCHING: Using best segment on cell {winner_cell}")
-    #     else:
-    #         # Select cell with fewest segments, tie-break randomly
-    #         num_segments = [len(self.connections.segments_for_cell(c)) for c in cells]
-    #         min_segments = min(num_segments)
-    #         candidates = [c for c, n in zip(cells, num_segments) if n == min_segments]
-    #         winner_cell = self.rng.choice(candidates)
-    #         # print(f"[burstColumn] BURST: Chose new winner cell {winner_cell} (min segments = {min_segments})")
-
-    #     self.winnerCells.append(winner_cell)
-    #     print(f"[BURST] col={col} winner_cell={winner_cell}")
-
-    #     if not learn:
-    #         # print("[burstColumn] Skipping learning")
-    #         return
-
-    #     if matchingSegments and prevWinnerCells:
-    #         # Adapt best segment and grow if possible
-    #         # print(f"[burstColumn] Adapting best segment on cell {winner_cell}")
-    #         self._adapt_segment(best_segment, prevActiveCells)
-    #         n_desired = self.maxNewSynapseCount - self.connections.num_active_potential_synapses(best_segment, prevActiveCells)
-    #         if n_desired > 0:
-    #             self._grow_synapses(best_segment, prevWinnerCells, n_desired)
-    #         self.lastUsedIterationForSegment[best_segment] = self.iteration
-    #         print(f"[LEARN] Adapted segment (best) : {best_segment} n_desired: {n_desired}")
-
-    #     elif prevWinnerCells:
-    #         # Create a new segment only if prevWinnerCells is non-empty
-    #         n_desired = self.maxNewSynapseCount
-    #         if n_desired > 0:
-    #             new_seg = self.connections.create_segment(
-    #                 winner_cell,
-    #                 last_used_map=self.lastUsedIterationForSegment,
-    #                 current_iter=self.iteration
-    #             )
-    #             # print(f"[burstColumn] Creating new segment on cell {winner_cell} with {n_desired} synapses")
-    #             self._grow_synapses(new_seg, prevWinnerCells, n_desired)
-    #             print(f"[SEGMENT] New segment created on cell {winner_cell} with synapses to {sorted(prevWinnerCells)} n_desired: {n_desired}")
-    #             self.lastUsedIterationForSegment[new_seg] = self.iteration
-    #             print(f"[LEARN] Created segment : {new_seg}")
-    #             print(f"[LEARN] Adapted segment (best) : {new_seg} n_desired: {n_desired}")
-
     def _burst_columns(self, active_columns):
         """Apply burst_column logic to all active columns."""
         for col in active_columns:
@@ -296,21 +201,6 @@ class TemporalMemory:
             self.winnerCells.append(winner)
             print(f"[BURST] col={column} unpredicted → all active, winner_cell={winner}")
 
-    def _adapt_segment(self, segment, prevActiveCells, perm_inc, perm_dec):
-        synapses = self.connections.synapses_for_segment(segment)
-        for s in synapses[:]:  # copy for safe iteration
-            cell = self.connections.presynaptic_cell(s)
-            perm = self.connections.permanence(s)
-            perm += perm_inc if cell in prevActiveCells else -perm_dec
-            perm = max(0.0, min(1.0, perm))
-            if perm < 1e-6:
-                self.connections.destroy_synapse(s)
-            else:
-                self.connections.update_permanence(s, perm)
-
-        if not self.connections.synapses_for_segment(segment):
-            self.connections.destroy_segment(segment)
-
     def _grow_synapses(self, segment, prevWinnerCells, n_desired):
         if not prevWinnerCells:
             return
@@ -320,7 +210,7 @@ class TemporalMemory:
         self.rng.shuffle(candidates)
 
         existing_count = self.connections.num_synapses(segment)
-        max_allowed = self.connections.maxSynapsesPerSegment or float('inf')
+        max_allowed = self.maxSynapsesPerSegment or float('inf')
         room = max_allowed - existing_count
         n_create = min(n_desired, room)
 
@@ -332,7 +222,7 @@ class TemporalMemory:
         print(f"[GROW] Existing presyn cells: {existing}")
         print(f"[GROW] Candidates: {candidates[:n_create]}")
 
-        if n_create < len(candidates) and self.connections.maxSynapsesPerSegment:
+        if n_create < len(candidates) and self.maxSynapsesPerSegment:
             to_remove = sorted(
                 self.connections.synapses_for_segment(segment),
                 key=lambda s: s.permanence
@@ -397,7 +287,7 @@ class TemporalMemory:
         If none exist, this should never happen due to burst logic assigning one.
         """
         cells = self.cells_for_column(col)
-        winner_cells = [c for c in cells if c in self.prevWinnerCells]
+        winner_cells = [c for c in cells if c in self.winnerCells]  #self.prevWinnerCells
 
         # 🔍 Sanity check
         if not winner_cells:
@@ -408,11 +298,6 @@ class TemporalMemory:
 
     def _predict_cells(self):
         self.predictiveCells = self._activate_dendrites()
-
-    def _update_state(self):
-        self.prevActiveCells = set(self.activeCells)
-        self.prevWinnerCells = set(self.winnerCells)
-        self.prevPredictiveCells = set(self.predictiveCells)
 
     def _get_best_matching_cell_and_segment(self, col, prev_active_cells):
         best_cell = None
@@ -438,19 +323,20 @@ class TemporalMemory:
         new_cells = list(set(source_cells) - existing)
         self.rng.shuffle(new_cells)
 
-        max_allowed = self.connections.maxSynapsesPerSegment or float('inf')
+        max_allowed = self.maxSynapsesPerSegment or float('inf')
         if max_allowed == float('inf'):
             to_add = new_cells
         else:
             room = int(max_allowed - self.connections.num_synapses(segment))
             to_add = new_cells[:room]
-        # room = int(max_allowed - self.connections.num_synapses(segment))
-        # to_add = new_cells[:room]
-
         for cell in to_add:
             self.connections.create_synapse(segment, cell, initial_perm)
 
         print(f"[CONNECT] Segment {segment} → synapses added: {to_add}")
+
+    def winner_cells_for_column(self, col):
+        """Return the list of winner cells in the given column for the current timestep."""
+        return [c for c in self.winnerCells if c // self.cellsPerColumn == col]
 
     @property
     def active_cells(self):
@@ -459,3 +345,29 @@ class TemporalMemory:
     @property
     def winner_cells(self):
         return self.winnerCells
+
+    def number_of_cells(self):
+        return self.number_of_columns() * self.cellsPerColumn
+
+    def winner_cells_for_column(self, col):
+        return [c for c in self.winnerCells if self.column_for_cell(c) == col]
+
+    def column_for_cell(self, cell):
+        return cell % self.columnDimensions[0]
+    
+    def number_of_columns(self):
+        return math.prod(self.columnDimensions)
+
+    def _update_state(self):
+        self.prevActiveCells = set(self.activeCells)
+        self.prevWinnerCells = set(self.winnerCells)
+        self.prevPredictiveCells = set(self.predictiveCells)
+
+    def reset(self):
+        self.activeCells = set()
+        self.winnerCells = set()
+        self.predictiveCells = set()
+        self.prevActiveCells = set()
+        self.prevWinnerCells = set()
+
+
