@@ -14,7 +14,7 @@ class TestTemporalMemoryLimits(unittest.TestCase):
         for _ in range(4):
             cell_segment_counts = {
                 c: len(tm.connections.segments_for_cell(c))
-                for c in tm.cellsForColumn(col)
+                for c in tm.cells_for_column(col)
             }
             min_segs = min(cell_segment_counts.values())
 

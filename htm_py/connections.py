@@ -158,23 +158,8 @@ class Connections:
         self._segment_owner[segment] = cell
         self._cell_to_segments[cell].append(segment)
         self._segment_to_synapses[segment] = []
-        
-        print(f"[createSegment] Created segment {segment.id} for cell {cell}")
+    
         return segment
-
-    # def create_segment(self, cell):
-    #     segments = self._cell_to_segments[cell]
-    #     if self.maxSegmentsPerCell is not None and len(segments) >= self.maxSegmentsPerCell:
-    #         oldest = segments[0]
-    #         self.destroy_segment(oldest)
-
-    #     segment = Segment(self._next_segment_id)
-    #     self._next_segment_id += 1
-    #     self._segment_owner[segment] = cell
-    #     self._cell_to_segments[cell].append(segment)
-    #     self._segment_to_synapses[segment] = []
-
-    #     return segment
 
     def destroy_segment(self, segment):
         cell = self._segment_owner.pop(segment, None)
@@ -187,7 +172,13 @@ class Connections:
         if segment in self._segment_to_synapses:
             del self._segment_to_synapses[segment]
 
+    # def segments_for_cell(self, cell):
+    #     return self._cell_to_segments.get(cell, [])
+    
     def segments_for_cell(self, cell):
+        """
+        Return all segments belonging to the given cell.
+        """
         return self._cell_to_segments.get(cell, [])
 
     def cell_for_segment(self, segment):

@@ -1,39 +1,65 @@
-# htm_model.py
-import numpy as np
-from .rdse_encoder import RDSE
-from .connections import Connections
-from .temporal_memory import TemporalMemory
+# # htm_model.py
+# import numpy as np
+# from .rdse_encoder import RDSE
+# from .connections import Connections
+# from .temporal_memory import TemporalMemory
 
+
+# class HTMModel:
+#     def __init__(self, enc_params, tm_params, seed=42):
+#         self.seed = seed
+
+#         # Initialize RDSE Encoder
+#         self.encoder = RDSE(
+#             resolution=enc_params.get("resolution", 0.1),
+#             n=enc_params.get("n", 2048),
+#             w=enc_params.get("w", 40),
+#             seed=seed,
+#         )
+
+#         # Setup TM
+#         self.tm = TemporalMemory(
+#             **tm_params
+#         )
+
+#     def compute(self, record, learn=True, verbose=False):
+#         # Extract value field for encoding
+#         value = record["value"] if isinstance(record, dict) else record
+#         timestamp = record["timestamp"] if isinstance(record, dict) else None
+
+#         # Encode input
+#         sdr = self.encoder.encode(value) # + self.dateencoder.encode(timestamp)
+
+#         # Active columns are simply the indices of True bits in the SDR
+#         active_columns = np.flatnonzero(sdr)
+
+#         # Compute TM
+#         outputs = self.tm.compute(active_columns, learn=learn, verbose=verbose)
+
+#         return outputs
+
+
+import numpy as np
+from htm_py.temporal_memory import TemporalMemory
+from htm_py.encoders.rdse import RDSE
+from htm_py.encoders.date import DateEncoder
+from htm_py.encoders.combine import combine_encodings
 
 class HTMModel:
-    def __init__(self, enc_params, tm_params, seed=42):
-        self.seed = seed
+    def __init__(self, enc_params, tm_params):
+        self.rdse = RDSE(**enc_params["rdse"])
+        self.date_encoder = DateEncoder(**enc_params["date"])
 
-        # Initialize RDSE Encoder
-        self.encoder = RDSE(
-            resolution=enc_params.get("resolution", 0.1),
-            n=enc_params.get("n", 2048),
-            w=enc_params.get("w", 40),
-            seed=seed,
-        )
+        self.tm = TemporalMemory(**tm_params)
 
-        # Setup TM
-        self.tm = TemporalMemory(
-            **tm_params
-        )
-
-    def compute(self, record, learn=True, verbose=False):
-        # Extract value field for encoding
+    def compute(self, record, learn=True):
         value = record["value"] if isinstance(record, dict) else record
         timestamp = record["timestamp"] if isinstance(record, dict) else None
 
-        # Encode input
-        sdr = self.encoder.encode(value) # + self.dateencoder.encode(timestamp)
+        enc_val = self.rdse.encode(value)
+        enc_time = self.dateencoder.encode(timestamp) if timestamp else np.array([], dtype=bool)
+        sdr = combine_encodings([enc_time, enc_val])
 
-        # Active columns are simply the indices of True bits in the SDR
         active_columns = np.flatnonzero(sdr)
-
-        # Compute TM
-        outputs = self.tm.compute(active_columns, learn=learn, verbose=verbose)
-
+        outputs = self.tm.compute(active_columns, learn=learn)
         return outputs
