@@ -1,65 +1,42 @@
-# # htm_model.py
-# import numpy as np
-# from .rdse_encoder import RDSE
-# from .connections import Connections
-# from .temporal_memory import TemporalMemory
-
-
-# class HTMModel:
-#     def __init__(self, enc_params, tm_params, seed=42):
-#         self.seed = seed
-
-#         # Initialize RDSE Encoder
-#         self.encoder = RDSE(
-#             resolution=enc_params.get("resolution", 0.1),
-#             n=enc_params.get("n", 2048),
-#             w=enc_params.get("w", 40),
-#             seed=seed,
-#         )
-
-#         # Setup TM
-#         self.tm = TemporalMemory(
-#             **tm_params
-#         )
-
-#     def compute(self, record, learn=True, verbose=False):
-#         # Extract value field for encoding
-#         value = record["value"] if isinstance(record, dict) else record
-#         timestamp = record["timestamp"] if isinstance(record, dict) else None
-
-#         # Encode input
-#         sdr = self.encoder.encode(value) # + self.dateencoder.encode(timestamp)
-
-#         # Active columns are simply the indices of True bits in the SDR
-#         active_columns = np.flatnonzero(sdr)
-
-#         # Compute TM
-#         outputs = self.tm.compute(active_columns, learn=learn, verbose=verbose)
-
-#         return outputs
-
-
 import numpy as np
 from htm_py.temporal_memory import TemporalMemory
 from htm_py.encoders.rdse import RDSE
 from htm_py.encoders.date import DateEncoder
-from htm_py.encoders.combine import combine_encodings
+from htm_py.encoders.multi import MultiEncoder
+
 
 class HTMModel:
-    def __init__(self, enc_params, tm_params):
-        self.rdse = RDSE(**enc_params["rdse"])
-        self.date_encoder = DateEncoder(**enc_params["date"])
-
+    def __init__(self, encoder_params, tm_params):
+        self.encoder = self._build_encoder(encoder_params)
         self.tm = TemporalMemory(**tm_params)
 
-    def compute(self, record, learn=True):
-        value = record["value"] if isinstance(record, dict) else record
-        timestamp = record["timestamp"] if isinstance(record, dict) else None
+    def _build_encoder(self, encoder_params):
+        encoders = {}
+        if "rdse" in encoder_params:
+            rdse_cfg = encoder_params["rdse"]
+            encoders["rdse"] = RDSE(
+                size=rdse_cfg.get("size", 2048),
+                resolution=rdse_cfg.get("resolution", 0.88),
+                seed=rdse_cfg.get("seed", 42),
+                min_val=rdse_cfg.get("min_val", 0.0),
+                max_val=rdse_cfg.get("max_val", 100.0),
+            )
+        if "date" in encoder_params:
+            date_cfg = encoder_params["date"]
+            encoders["date"] = DateEncoder(
+                timeOfDay=date_cfg.get("timeOfDay", (21, 9.49)),
+                weekend=date_cfg.get("weekend", 1)
+            )
+        return MultiEncoder(encoders)
 
-        enc_val = self.rdse.encode(value)
-        enc_time = self.dateencoder.encode(timestamp) if timestamp else np.array([], dtype=bool)
-        sdr = combine_encodings([enc_time, enc_val])
-
+    def compute(self, input_dict, learn=True):
+        # Expect input_dict = {"value": float, "timestamp": datetime}
+        encoding_input = {
+            "rdse": input_dict["value"],
+            "date": input_dict["timestamp"]
+        }
+        sdr = self.encoder.encode(encoding_input)
         active_columns = np.flatnonzero(sdr)
-        outputs = self.tm.compute(active_columns, learn=learn)
-        return outputs
+
+        anomaly_score, prediction_count = self.tm.compute(active_columns, learn)
+        return anomaly_score, prediction_count
