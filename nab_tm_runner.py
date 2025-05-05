@@ -1,3 +1,16 @@
+# nab_tm_runner.py
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+    handlers=[
+        logging.FileHandler("htm_debug.log", mode='w'),
+        logging.StreamHandler()
+    ]
+)
+
+
 import pandas as pd
 import csv
 
@@ -28,10 +41,10 @@ def main():
     tm_params = {
         "columnDimensions": (563,),
         "cellsPerColumn": 32,
-        "activationThreshold": 13,
+        "activationThreshold": 7, #from 13
         "initialPermanence": 0.21,
         "connectedPermanence": 0.50,
-        "minThreshold": 10,
+        "minThreshold": 5, #from 10
         "maxNewSynapseCount": 20,
         "permanenceIncrement": 0.1,
         "permanenceDecrement": 0.1,
@@ -43,7 +56,7 @@ def main():
 
     model = HTMModel(encoder_params, tm_params)
 
-    limit = 100
+    limit = 25
     timestamps, scores, counts = [], [], []
     for _, row in df[:limit].iterrows():
         input_dict = {"value": row["value"], "timestamp": row["timestamp"]}

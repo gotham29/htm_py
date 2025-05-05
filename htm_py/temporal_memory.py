@@ -1,241 +1,20 @@
-# import logging
-# logging.basicConfig(
-#     filename="tm_debug.log",
-#     level=logging.DEBUG,
-#     filemode='w',
-#     format="%(asctime)s [%(levelname)s] %(message)s",
-#     force=True  # <- REQUIRED under pytest or if logger was already initialized
-# )
+import logging
+import logging
+import os
 
-# import numpy as np
-# from htm_py.connections import Connections
+LOG_FILE = "htm_debug.log"
 
-
-# class TemporalMemory:
-#     def __init__(self, columnDimensions, cellsPerColumn,
-#                  activationThreshold, initialPermanence, connectedPermanence,
-#                  minThreshold, maxNewSynapseCount,
-#                  permanenceIncrement, permanenceDecrement,
-#                  predictedSegmentDecrement):
-
-#         # --------------------------
-#         # CORE MODEL CONFIGURATION
-#         # --------------------------
-#         self.columnDimensions = columnDimensions
-#         self.cellsPerColumn = cellsPerColumn
-#         self.numColumns = np.prod(columnDimensions)
-
-#         # Synapse permanence & thresholds
-#         self.initialPermanence = initialPermanence
-#         self.connectedPermanence = connectedPermanence
-#         self.activationThreshold = activationThreshold
-#         self.minThreshold = minThreshold
-#         self.maxNewSynapseCount = maxNewSynapseCount
-#         self.permanenceIncrement = permanenceIncrement
-#         self.permanenceDecrement = permanenceDecrement
-#         self.predictedSegmentDecrement = predictedSegmentDecrement
-
-#         # --------------------------
-#         # CELL STATE
-#         # --------------------------
-#         self.activeCells = set()
-#         self.prevActiveCells = set()
-#         self.winnerCells = set()
-#         self.prevWinnerCells = set()
-#         self.predictiveCells = set()
-#         self.prevPredictiveCells = set()
-#         self.burstColumns = set()
-
-#         # --------------------------
-#         # TEMPORAL TRACKING
-#         # --------------------------
-#         self.iteration = 0
-#         self.learn = True
-#         self.activeColumns = []
-#         self.predictedColumns = set()
-
-#         # --------------------------
-#         # CONNECTIVITY STRUCTURE
-#         # --------------------------
-#         self.connections = Connections(self.numColumns * self.cellsPerColumn)
-
-#         # --------------------------
-#         # OUTPUTS
-#         # --------------------------
-#         self.anomaly_score = None
-#         self.prediction_count = None
-
-#     def compute(self, activeColumns, learn):
-#         self.iteration += 1
-#         self.learn = learn
-#         self.activeColumns = activeColumns
-#         self.burstColumns = set()
-#         self.activeCells = set()
-#         self.winnerCells = set()
-
-#         # Update predictedColumns before activation
-#         self.predictedColumns = {
-#             self.connections.column_for_cell(c) for c in self.prevPredictiveCells
-#         }
-
-#         self._activate_columns()
-
-#         if learn:
-#             self._learn_segments()
-
-#         self._predict_cells()
-#         self._calculate_anomaly_score()
-#         self._calculate_prediction_count()
-#         self._update_state()
-
-#         for handler in logging.getLogger().handlers:
-#             handler.flush()
-
-#         return self.anomaly_score, self.prediction_count
-
-#     def _activate_columns(self):
-#         for col in self.activeColumns:
-#             best_cell, best_seg = self._get_best_matching_segment(col)
-#             logging.debug(f"[Activate] Column {col}: best_cell={best_cell}, best_seg={best_seg}")
-#             if best_seg and self._num_active_connected_synapses(best_seg, self.prevActiveCells) >= self.activationThreshold:
-#                 self.activeCells.add(best_cell)
-#                 winner = self._pick_winner_cell_for_segment(best_seg)
-#                 self.winnerCells.add(winner)
-#                 logging.debug(f"[Activate] Predictive column {col}, winner={winner}")
-#             else:
-#                 self.burstColumns.add(col)
-#                 logging.debug(f"[Activate] Bursting column {col}")
-#                 self._burst_column(col)
-
-#     def _burst_column(self, column):
-#         for cell in self._cells_for_column(column):
-#             self.activeCells.add(cell)
-
-#         best_cell, best_seg = self._get_best_matching_segment(column)
-#         if best_seg:
-#             winner = self._pick_winner_cell_for_segment(best_seg)
-#             self.winnerCells.add(winner)
-#             logging.debug(f"[Burst] Column {column}: winner from best segment: {winner}")
-#         else:
-#             fallback = self._get_least_used_cell(column)
-#             self.winnerCells.add(fallback)
-#             logging.debug(f"[Burst] Column {column}: no matching segment, fallback winner={fallback}")
-
-#     def _cells_for_column(self, column):
-#         start = column * self.cellsPerColumn
-#         return list(range(start, start + self.cellsPerColumn))
-
-#     def _get_best_matching_segment(self, column):
-#         """
-#         Returns (cell, segment) with the best matching segment on a cell in the column.
-#         A segment is considered matching if it has >= minThreshold active connected synapses.
-#         If no such segment exists, returns (None, None).
-#         """
-#         best_cell = None
-#         best_segment = None
-#         max_overlap = self.minThreshold
-
-#         for cell in self._cells_for_column(column):
-#             segments = self.connections.segments_for_cell(cell)
-#             for seg in segments:
-#                 count = self._num_active_connected_synapses(seg, self.prevActiveCells)
-#                 logging.debug(f"[BestMatch] Column={column} Cell={cell} Segment={seg} ActiveConnected={count}")
-#                 if count >= max_overlap:
-#                     max_overlap = count
-#                     best_cell = cell
-#                     best_segment = seg
-
-#         if best_cell is None:
-#             logging.debug(f"[BestMatch] Column={column} has no segment meeting minThreshold={self.minThreshold}")
-#         else:
-#             logging.debug(f"[BestMatch] Column={column} selected Cell={best_cell} Segment={best_segment} with overlap={max_overlap}")
-
-#         return best_cell, best_segment
-
-#     def _num_active_connected_synapses(self, segment, prev_cells):
-#         active = self.connections.active_synapses(
-#             segment, prev_cells, connected_only=True
-#         )
-#         return len(active)
-
-#     def _pick_winner_cell_for_segment(self, segment):
-#         return self.connections.cell_for_segment(segment)
-
-#     def _get_least_used_cell(self, column):
-#         min_segments = float('inf')
-#         best_cell = None
-#         for cell in self._cells_for_column(column):
-#             seg_count = len(self.connections.segments_for_cell(cell))
-#             if seg_count < min_segments:
-#                 min_segments = seg_count
-#                 best_cell = cell
-#         return best_cell
-
-#     def _learn_segments(self):
-#         logging.debug(f"[Learn] prevActiveCells={self.prevActiveCells}")
-#         for column in self.activeColumns:
-#             if column in self.predictedColumns:
-#                 cell, segment = self._get_best_matching_segment(column)
-#                 if cell is None or segment is None:
-#                     logging.debug(f"[Learn] Predicted column {column} but no best match found.")
-#                     continue
-#                 self.winnerCells.add(cell)
-#                 if self.learn:
-#                     active_syns = self._get_segment_active_synapses(segment, self.prevActiveCells)
-#                     self.connections.adapt_segment(segment, active_syns, self.initialPermanence)
-#                     logging.debug(f"[Learn] Adapted segment {segment} on cell {cell} with synapses {active_syns}")
-#             else:
-#                 cell, _ = self._get_best_matching_segment(column)
-#                 if cell is None:
-#                     logging.debug(f"[Learn] Bursting column {column} but no best match found.")
-#                     continue
-#                 self.winnerCells.add(cell)
-#                 if self.learn:
-#                     new_segment = self.connections.create_segment(cell)
-#                     syn_sources = list(self.prevActiveCells)
-#                     self.connections.create_synapses(new_segment, syn_sources, self.initialPermanence)
-#                     logging.debug(f"[Learn] Created new segment {new_segment} on cell {cell} with synapses {syn_sources}")
-
-#     def _get_segment_active_synapses(self, segment, prev_active_cells):
-#         syns = self.connections.synapses_for_segment(segment)
-#         return [s for s in syns if self.connections.synapse_to_cell(s) in prev_active_cells]
-
-#     def _predict_cells(self):
-#         self.predictiveCells = set()
-
-#         for cell in range(self.numColumns * self.cellsPerColumn):
-#             segments = self.connections.segments_for_cell(cell)
-#             for seg in segments:
-#                 if self.connections.segment_active(
-#                     seg,
-#                     self.winnerCells,
-#                     self.activationThreshold,
-#                     connected_only=False
-#                 ):
-#                     self.predictiveCells.add(cell)
-#                     break  # no need to check other segments for this cell
-#         logging.debug(f"Predicted cells this step: {self.predictiveCells}")
-
-#     def _calculate_anomaly_score(self):
-#         if not self.prevPredictiveCells:
-#             self.anomaly_score = 1.0
-#         else:
-#             overlap = self.activeCells & self.prevPredictiveCells
-#             score = 1.0 - len(overlap) / len(self.activeCells) if self.activeCells else 0.0
-#             self.anomaly_score = score
-#             logging.debug(f"[Anomaly] Overlap={overlap}, Score={score}")
-
-#     def _calculate_prediction_count(self):
-#         self.prediction_count = len(self.predictiveCells) / len(self.activeColumns)
-
-#     def _update_state(self):
-#         self.prevActiveCells = set(self.activeCells)
-#         self.prevWinnerCells = set(self.winnerCells)
-#         self.prevPredictiveCells = set(self.predictiveCells)
-
-
-
-# temporal_memory.py
+# Ensure only one handler is added
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        handlers=[
+            logging.FileHandler(LOG_FILE, mode='w'),
+            logging.StreamHandler()
+        ]
+    )
+logger = logging.getLogger(__name__)
 
 from collections import defaultdict
 import numpy as np
@@ -256,6 +35,7 @@ class TemporalMemory:
         permanenceIncrement,
         permanenceDecrement,
         predictedSegmentDecrement,
+        connections=None,
         seed=None
     ):
         # Spatial layout
@@ -277,14 +57,19 @@ class TemporalMemory:
         self.predictedSegmentDecrement = predictedSegmentDecrement
 
         # Connections: handles segments, synapses, and permanence
-        self.connections = Connections(
-            columnDimensions=columnDimensions,
-            cellsPerColumn=cellsPerColumn,
-            initialPermanence=initialPermanence,
-            connectedPermanence=connectedPermanence
-        )
+        if connections is None:
+            self.connections = Connections(
+                columnDimensions=columnDimensions,
+                cellsPerColumn=cellsPerColumn,
+                initialPermanence=initialPermanence,
+                connectedPermanence=connectedPermanence,
+                maxSegmentsPerCell=maxSegmentsPerCell
+            )
+        else:
+            self.connections = connections
 
         # State variables
+        self.iteration_num = 0
         self.activeColumns = set()
         self.activeCells = set()
         self.winnerCells = set()
@@ -309,17 +94,16 @@ class TemporalMemory:
         Phase 3: Predict (set predictive state for next time step)
         Final: Anomaly score, prediction count, state update
         """
-        self.activeColumns = set(activeColumns)
         self.learn = learn
+        self._resetState()  # Clear previous state first
+        self.activeColumns = set(activeColumns)  # Then assign active columns
 
-        self._resetState()  # clears sets
-        self._activateCells(activeColumns)
+        self._activateCells()
         self._activateDendrites()
         if learn:
             self._learnSegments()
+
         self._predictCells()
-        if learn:
-            self._punishPredictedSegments()
         self._calculateAnomalyScore()
         self._calculatePredictionCount()
         self._updateState()
@@ -335,7 +119,7 @@ class TemporalMemory:
         self.activeSegments = set()
         self.learningSegments = set()
 
-    def _activateCells(self, activeColumns):
+    def _activateCells(self):
         """
         Phase 1: Activates cells based on predictions or bursts.
         """
@@ -344,15 +128,15 @@ class TemporalMemory:
         self.activeSegments = set()
         self.learningSegments = set()
 
-        for column in activeColumns:
+        for column in self.activeColumns:
             predictiveCells = [
                 cell for cell in self.connections.cellsForColumn(column, self.cellsPerColumn)
                 if self.connections.segmentActive(
                     self.connections.activeSegmentsForCell(cell, self.prevActiveCells),
+                    self.prevActiveCells,  # This was missing!
                     self.activationThreshold
                 )
             ]
-
             if predictiveCells:
                 # At least one cell was predicted correctly → activate those cells
                 for cell in predictiveCells:
@@ -379,7 +163,9 @@ class TemporalMemory:
                     self.winnerCells.add(bestCell)
                     self.activeSegments.add(bestSeg)
                     self.learningSegments.add(bestSeg)
+                    logging.debug(f"✅ Winner cell selected for new segment: {bestCell}")
                 else:
+                    logging.debug(f"❌ No winner cell found for column {column}")
                     # No good match → choose least used cell and create new segment
                     bestCell = self._getLeastUsedCell(column)
                     if bestCell is not None:
@@ -388,7 +174,11 @@ class TemporalMemory:
                         # All cells reached max segments, skip learning
                         pass
 
-        self.activeColumns = activeColumns
+        logger.debug(f"[ACTIVATE] ActiveColumns: {self.activeColumns}")
+        logger.debug(f"[ACTIVATE] WinnerCells: {self.winnerCells}")
+        logger.debug(f"[ACTIVATE] LearningSegments: {[s.id for s in self.learningSegments]}")
+
+        # self.activeColumns = set(activeColumns)
 
     def _activateDendrites(self):
         """
@@ -398,7 +188,7 @@ class TemporalMemory:
         self.activeSegments = set()
         self.matchingSegments = set()
 
-        for segment in self.connections.segments:
+        for segment in self.connections._segments:
             activeSynapses = self.connections.activeSynapses(segment, self.prevActiveCells)
             if len(activeSynapses) >= self.activationThreshold:
                 self.activeSegments.add(segment)
@@ -407,37 +197,37 @@ class TemporalMemory:
 
     def _learnSegments(self):
         """
-        Reinforces learning segments and creates new ones when necessary.
-        Matches Numenta's adaptSegments() in TM.cpp
+        Phase 2: Learning. For each active column, choose a cell (best match or least used),
+        and either adapt an existing segment or create a new one to learn from prevActiveCells.
         """
-        self.segmentsToUpdate = set()
+        prev_active = self.prevActiveCells
+        prev_winnder = self.prevWinnerCells
+        logger.debug(f"Phase 2: Learning on active columns: {self.activeColumns}")
 
-        for segment in self.learningSegments:
-            cell = self.connections.cellForSegment(segment)
+        for column in self.activeColumns:
+            best_cell, best_segment, num_active_synapses = self.connections.getBestMatchingSegment(
+                column, prev_active, self.activationThreshold)
 
-            if self.connections.segmentExists(segment):
-                # Adapt existing segment
-                self.connections.adaptSegment(
-                    segment=segment,
-                    activeSynapsesSource=self.prevActiveCells,
-                    permanenceIncrement=self.permanenceIncrement,
-                    permanenceDecrement=self.permanenceDecrement,
-                    connectedPermanence=self.connectedPermanence,
-                    maxSynapsesPerSegment=self.maxSynapsesPerSegment
-                )
+            if best_segment is not None and num_active_synapses >= self.minThreshold:
+                self.connections.adapt_segment(
+                    segment=best_segment,
+                    prevWinnerCells=prev_winnder,
+                    positive_reinforcement=True,
+                    perm_inc=self.permanenceIncrement,
+                    perm_dec=self.permanenceDecrement)
+                logger.debug(f"Adapted segment on cell {best_cell} in column {column} with presynaptic cells {prev_active}")
+                self.winnerCells.add(best_cell)
             else:
-                # Only create segment if cell is under limit
-                if len(self.connections.segmentsForCell(cell)) < self.maxSegmentsPerCell:
-                    new_segment = self.connections.createSegment(cell)
-                    self.connections.createSynapses(
-                        segment=new_segment,
-                        presynapticCells=self.prevActiveCells,
-                        initialPermanence=self.initialPermanence,
-                        maxNewSynapses=self.maxNewSynapseCount
-                    )
-                    segment = new_segment  # Ensure we track the new segment
-
-            self.segmentsToUpdate.add(segment)
+                learning_cell = best_cell if best_cell is not None else self._getLeastUsedCell(column)
+                segment = self.connections.createSegment(learning_cell, self.iteration_num)
+                self.connections.create_synapses(
+                    segment,
+                    presynaptic_cells=self.prevWinnerCells or self.prevActiveCells,
+                    initial_permanence=self.initialPermanence,
+                    max_new_synapses=self.maxNewSynapseCount
+                )
+                logger.debug(f"Created new segment on cell {learning_cell} in column {column} with synapses to {self.prevWinnerCells}")
+                self.winnerCells.add(learning_cell)
 
     def _getBestMatchingSegment(self, column, activeCells):
         bestCell = None
@@ -461,4 +251,69 @@ class TemporalMemory:
         If there are ties, selects randomly among them.
         """
         cells = self.connections.cellsForColumn(column, self.cellsPerColumn)
-        cell_segment_counts = [(cell, len(se
+        cell_segment_counts = [(cell, len(self.connections.segmentsForCell(cell))) for cell in cells]
+
+        min_count = min(count for cell, count in cell_segment_counts if count < self.maxSegmentsPerCell)
+        tied_cells = [cell for cell, count in cell_segment_counts if count == min_count]
+
+        return np.random.choice(tied_cells) if tied_cells else None
+
+    def _predictCells(self):
+        """
+        Phase 3: Predictive state - determine predictive cells for next timestep.
+        """
+        self.predictiveCells.clear()
+
+        for segment in self.connections._segments:
+            connected_sources = self.connections.connectedSynapses(segment, self.connectedPermanence)
+            active_sources = connected_sources & self.activeCells
+            logger.debug(f"Segment {segment.id} - connected sources: {connected_sources}, active sources: {active_sources}")
+
+            if len(active_sources) >= self.activationThreshold:
+                cell = self.connections.cellForSegment(segment)
+                self.predictiveCells.add(cell)
+                logger.debug(f"Cell {cell} added to predictiveCells")
+
+    def _punishPredictedSegments(self):
+        """
+        Reduce permanence of segments that predicted incorrectly.
+        A segment is punished if it was predictive but did not become active.
+        """
+        for cell in self.prevPredictiveCells:
+            segments = self.connections.segmentsForCell(cell)
+            for segment in segments:
+                # If segment was predicted but not active now
+                if segment not in self.activeSegments:
+                    self.connections.decreaseSynapsePermanences(
+                        segment,
+                        self.predictedSegmentDecrement
+                    )
+
+    def _calculateAnomalyScore(self):
+        """
+        Calculates the anomaly score as the fraction of active columns that burst.
+        A column bursts when no cell in it was predicted.
+        """
+        burstingColumns = self.activeColumns - self.predictedColumns
+        self.anomalyScore = len(burstingColumns) / float(len(self.activeColumns))
+        # logger.debug(f"[ANOMALY] ActiveColumns: {self.activeColumns}")
+        logger.debug(f"[ANOMALY] PredictedColumns: {self.predictedColumns}")
+        logger.debug(f"[ANOMALY] BurstingColumns: {burstingColumns}")
+        logger.debug(f"[ANOMALY] Anomaly Score: {self.anomalyScore}")
+
+    def _calculatePredictionCount(self):
+        """
+        Computes the number of unique columns that contain predictive cells.
+        """
+        self.predictionCount = len(self.predictiveCells) / len(self.activeColumns)
+
+
+    def _updateState(self):
+        """
+        Updates the internal state by saving current cells and segments
+        as the 'previous' state for the next timestep.
+        """
+        self.prevActiveCells = self.activeCells
+        self.prevWinnerCells = self.winnerCells
+        self.prevPredictiveCells = self.predictiveCells
+
