@@ -1,73 +1,43 @@
-# import numpy as np
-
-# class RDSE:
-#     def __init__(self, size=563, resolution=0.88, min_val=0.0, max_val=100.0, seed=42):
-#         self.resolution = resolution
-#         self.seed = seed
-#         self.min_val = min_val
-#         self.max_val = max_val
-#         self.totalBits = size
-#         self.bucket_map = {}
-
-#     @property
-#     def size(self):
-#         return self.totalBits
-
-#     def encode(self, value):
-#         if isinstance(value, (np.ndarray, list)):
-#             value = np.array(value).flatten()[0]
-#         value = float(value)
-
-#         bucket = int(value / self.resolution)  # ← Numenta-correct (no min_val subtraction)
-
-#         if bucket not in self.bucket_map:
-#             np.random.seed(self.seed + bucket)
-#             indices = np.random.choice(self.totalBits, 21, replace=False)
-#             self.bucket_map[bucket] = indices
-
-#         indices = self.bucket_map[bucket]
-#         encoding = np.zeros(self.totalBits, dtype=np.int8)
-#         encoding[indices] = 1
-
-#         return np.ravel(encoding)
-
-#     def _bucket_for_value(self, value):
-#         return int((value - self.min_val) / self.resolution)
-
-
 import numpy as np
 
+
 class RDSE:
-    def __init__(self, size, resolution=0.88, seed=42, min_val=0.0, max_val=100.0):
-        self.resolution = resolution
-        self.seed = seed
-        self._size = size
-        self.totalBits = size
+    def __init__(self, min_val: float, max_val: float, n: int = 100, w: int = 21, resolution: float = None):
+        if min_val >= max_val:
+            raise ValueError("min_val must be less than max_val")
+        if w >= n:
+            raise ValueError("w must be smaller than n")
+
         self.min_val = min_val
         self.max_val = max_val
-        self.bucket_map = {}
+        self.n = n
+        self.w = w
+        self.range = max_val - min_val
 
-    @property
-    def size(self):
-        return self.totalBits
-
-    def _bucket_for_value(self, value):
-        return int((value - self.min_val) / self.resolution)
+        if resolution:
+            self.resolution = resolution
+            self.num_buckets = int(round(self.range / resolution))
+        else:
+            self.num_buckets = n - w + 1
+            self.resolution = self.range / self.num_buckets
 
     def encode(self, value):
-        if isinstance(value, (np.ndarray, list)):
-            value = np.array(value).flatten()[0]
-        value = float(value)
+        output = np.zeros(self.n, dtype=np.int8)
+        
+        # Clip value to min/max
+        clipped = max(min(value, self.max_val), self.min_val)
 
-        bucket = self._bucket_for_value(value)
+        # Calculate bucket index
+        bucket_index = int((clipped - self.min_val) / self.resolution)
+        
+        # Ensure window fits
+        if bucket_index > self.n - self.w:
+            bucket_index = self.n - self.w
 
-        if bucket not in self.bucket_map:
-            np.random.seed(self.seed + bucket)
-            indices = np.random.choice(self.totalBits, 21, replace=False)
-            self.bucket_map[bucket] = indices
+        start = bucket_index
+        end = start + self.w
+        output[start:end] = 1
+        return output
 
-        indices = self.bucket_map[bucket]
-        encoding = np.zeros(self.totalBits, dtype=np.int8)
-        encoding[indices] = 1
-
-        return np.ravel(encoding)
+    def get_width(self):
+        return self.n
