@@ -34,17 +34,29 @@ def main():
     df = load_nab_file(input_csv)
 
     # Provide only configs
-    encoder_params = {
+    enc_params = {
         "rdse": {"size": 563, "resolution": 0.88, "seed": 42},
         "date": {"timeOfDay": (21, 9.49), "weekend": 1}
+    }
+    sp_params = {
+        "inputDimensions": (563,),         # Match encoder output size
+        "columnDimensions": (2048,),
+        "potentialPct": 0.85,
+        "globalInhibition": True,
+        "numActiveColumnsPerInhArea": 40,
+        "synPermActiveInc": 0.03,
+        "synPermInactiveDec": 0.008,
+        "synPermConnected": 0.1,
+        "boostStrength": 0.0,
+        "seed": 42
     }
     tm_params = {
         "columnDimensions": (563,),
         "cellsPerColumn": 32,
-        "activationThreshold": 7, #from 13
+        "activationThreshold": 13, #from 7
         "initialPermanence": 0.21,
         "connectedPermanence": 0.50,
-        "minThreshold": 5, #from 10
+        "minThreshold": 10, #from 5
         "maxNewSynapseCount": 20,
         "permanenceIncrement": 0.1,
         "permanenceDecrement": 0.1,
@@ -54,13 +66,13 @@ def main():
         "seed": 42
     }
 
-    model = HTMModel(encoder_params, tm_params)
+    model = HTMModel(enc_params, sp_params, tm_params)
 
-    limit = 25
+    limit = 200
     timestamps, scores, counts = [], [], []
     for _, row in df[:limit].iterrows():
         input_dict = {"value": row["value"], "timestamp": row["timestamp"]}
-        anomaly_score, prediction_count = model.compute(input_dict, learn=True)
+        anomaly_score, prediction_count = model.compute(input_dict, learn=True, iteration=_)
         timestamps.append(row["timestamp"])
         scores.append(anomaly_score)
         counts.append(prediction_count)
