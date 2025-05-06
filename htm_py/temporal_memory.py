@@ -68,13 +68,41 @@ class TemporalMemory:
             self._learn_segments(self.activeColumns, self.prevWinnerCells)
         self._predict_cells()
 
-        logger.debug(f"[COMPUTE] Winner cells: {sorted(self.winnerCells)}")
+        # logger.debug(f"[COMPUTE] Winner cells: {sorted(self.winnerCells)}")
         logger.debug(f"[COMPUTE] Predictive cells: {sorted(self.predictiveCells)}")
+
+        anomaly_score = self.calculate_anomaly_score()
+        prediction_count = self.calculate_prediction_count()
 
         # SAVE STATE for next step
         self.prevActiveCells = set(self.activeCells)
         self.prevWinnerCells = set(self.winnerCells)
         self.prevPredictiveCells = set(self.predictiveCells)
+
+        return anomaly_score, prediction_count
+
+    def calculate_anomaly_score(self):
+        # Build set of columns that were predicted last timestep
+        predicted_columns_last_step = {
+            cell // self.cellsPerColumn for cell in self.prevPredictiveCells
+        }
+
+        # Count how many currently active columns were predicted
+        num_predicted_columns = sum(
+            1 for col in self.activeColumns if col in predicted_columns_last_step
+        )
+
+        # Total number of active columns
+        num_active_columns = len(self.activeColumns)
+
+        # Compute anomaly score
+        anomaly_score = 1.0 - (num_predicted_columns / num_active_columns)
+
+        return anomaly_score
+
+    def calculate_prediction_count(self):
+        prediction_count = len(self.prevPredictiveCells) / len(self.activeColumns)
+        return prediction_count
 
     def _cells_for_column(self, col):
         start = col * self.cellsPerColumn
@@ -90,17 +118,25 @@ class TemporalMemory:
             predicted_cells = [c for c in column_cells if c in self.prevPredictiveCells]
 
             if predicted_cells:
+                # If any cell in this column was predicted, pick one as winner
                 cell = predicted_cells[0]
                 self.activeCells.add(cell)
                 self.winnerCells.add(cell)
                 self.winnerCellForColumn[col] = cell
             else:
-                for c in column_cells:
-                    self.activeCells.add(c)
+                # No predicted cells: column bursts
+                self.activeCells.update(column_cells)
+
                 if self.learn:
+                    # Select a cell to grow a segment from (winner cell)
                     cell = getLeastUsedCell(self.connections, column_cells)
                     self.winnerCells.add(cell)
                     self.winnerCellForColumn[col] = cell
+
+                    # 🔥 PATCH: Ensure segment growth will happen
+                    # Force segment creation by marking no matching segment
+                    if cell not in self.prevPredictiveCells:
+                        self.segmentActiveForCell[cell] = None
 
     def _predict_cells(self):
         self.predictiveCells = set()
@@ -108,9 +144,9 @@ class TemporalMemory:
         self.segmentActiveForCell = {}
 
         for segment in self.connections.segments():
-            logger.debug(f"[PREDICT] Checking segment {segment}")
+            # logger.debug(f"[PREDICT] Checking segment {segment}")
             active_syns = self.connections.active_synapses(segment, self.activeCells, self.connectedPermanence)
-            logger.debug(f"[PREDICT] Segment {segment}: {len(active_syns)} active synapses")
+            # logger.debug(f"[PREDICT] Segment {segment}: {len(active_syns)} active synapses")
             if len(active_syns) >= self.activationThreshold:
                 cell = self.connections.cell_for_segment(segment)
                 self.predictiveCells.add(cell)
@@ -122,9 +158,8 @@ class TemporalMemory:
             learningCell = self.winnerCellForColumn.get(col)
             if learningCell is None:
                 continue  # Skip if no winner cell for this column
-
-            logger.debug(f"[LEARN] Column {col} → LearningCell {learningCell}")
-
+            
+            # logger.debug(f"[LEARN] Column {col} → LearningCell {learningCell}")
             matchingSegment = None
             if learningCell in self.prevPredictiveCells and learningCell in self.segmentActiveForCell:
                 matchingSegment = self.segmentActiveForCell[learningCell]
@@ -132,9 +167,9 @@ class TemporalMemory:
             else:
                 matchingSegment, overlap = getBestMatchingSegment(
                     self.connections, learningCell, prevWinnerCells, self.minThreshold, return_overlap=True)
-
+            
             if matchingSegment is not None:
-                logger.debug(f"[LEARN] Adapting segment {matchingSegment} on cell {learningCell}")
+                # Adapt existing matching segment
                 active_synapses = [
                     s for s in self.connections.synapsesForSegment(matchingSegment)
                     if self.connections.dataForSynapse(s).presynapticCell in prevWinnerCells
@@ -143,16 +178,9 @@ class TemporalMemory:
                                 positiveReinforcement=True,
                                 permanenceIncrement=self.permanenceIncrement,
                                 permanenceDecrement=self.permanenceDecrement)
+                self.segmentActiveForCell[learningCell] = matchingSegment
             else:
-                # ✅ Allow initial segment creation if this is the first step (no predictions yet)
-                if not prevWinnerCells and not self.prevPredictiveCells:
-                    logger.debug(f"[LEARN] Initial segment creation on cell {learningCell} with no prior context")
-                elif not prevWinnerCells:
-                    logger.debug(f"[LEARN] Skipping segment creation for cell {learningCell} due to empty prevWinnerCells")
-                    continue
-
-                logger.debug(f"[LEARN] No matching segment → creating new segment on cell {learningCell}")
-                # Inside _learn_segments(), when creating a new segment
+                # Create new segment if no match found
                 newSegment = self.connections.createSegment(learningCell)
                 growSynapsesToSegment(
                     self.connections,
@@ -161,7 +189,7 @@ class TemporalMemory:
                     initialPermanence=self.connectedPermanence,
                     permanenceBoost=0.1
                 )
-                self.segmentActiveForCell[learningCell] = newSegment  # 🔥 Critical for prediction later
+                self.segmentActiveForCell[learningCell] = newSegment
 
     def reset(self):
         self.activeCells.clear()
@@ -258,16 +286,9 @@ def growSynapsesToSegment(connections, segment, presynapticCells, initialPermane
         if cell in existing:
             continue
         perm = min(initialPermanence + permanenceBoost, 1.0)
-        logger.debug(f"[GROW] Creating synapse to presynapticCell {cell} with permanence={perm}")
+        # logger.debug(f"[GROW] Creating synapse to presynapticCell {cell} with permanence={perm}")
         synapse = connections.createSynapse(segment, cell, perm)
         new_synapses.append(synapse)
-
-    # for cell in presynapticCells:
-    #     if cell in existing:
-    #         continue
-    #     perm = min(initialPermanence + permanenceBoost, 1.0)
-    #     synapse = connections.createSynapse(segment, cell, perm)
-    #     new_synapses.append(synapse)
 
     return new_synapses
 

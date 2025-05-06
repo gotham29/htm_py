@@ -69,8 +69,10 @@ def main():
 
     model = HTMModel(encoder_params=enc_params, sp_params=sp_params, tm_params=tm_params)
 
+    limit = 100
     for i, row in enumerate(load_csv(csv_path)):
-        # try:
+        if i > limit:
+            continue
         raw_value = float(row[value_key])
         dt = datetime.datetime.fromisoformat(row[timestamp_key])
         input_dict = {
@@ -78,11 +80,9 @@ def main():
             "date": dt
         }
         # print(f"time = {i}; input_dict = {input_dict}")
-        print(f"time = {i}; input_dict = {input_dict}; encoded = {model.encoder.encode(input_dict)}")
+        # print(f"time = {i}; input_dict = {input_dict}; encoded = {model.encoder.encode(input_dict)}")
         anomaly_score, prediction_count = model.compute(input_dict, learn=True, iteration=i)
         print(f"time={i} anomaly_score={anomaly_score:.3f} pred_count={prediction_count:.3f}")
-        # except Exception as e:
-        #     print(f"Error processing row {i}: {e}")
 
 if __name__ == "__main__":
     main()

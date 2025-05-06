@@ -58,14 +58,14 @@ class HTMModel:
         encoding = np.array(encoding, dtype=np.uint32)
 
         # SP compute
-        active_columns = np.zeros(self.tm.numberOfColumns, dtype=np.uint32)
-        self.sp.compute(encoding, learn, active_columns, iteration)
+        active_columns = np.zeros(self.tm.columnDimensions[0], dtype=np.uint32)
+        self.sp.compute(encoding, False, active_columns, iteration)
 
         self.last_active_columns = active_columns.nonzero()[0].tolist()
 
-        print(f"encoding = {encoding}")
-        print(f"active_columns (SP input) = {active_columns}")
-        print(f"self.last_active_columns (SP output) = {self.last_active_columns}")
+        # print(f"\nencoding = {encoding}")
+        # print(f"active_columns (SP input) = {active_columns}")
+        # print(f"self.last_active_columns (SP output) = {self.last_active_columns}")
 
         # TM compute
         anomaly_score, prediction_count = self.tm.compute(self.last_active_columns, learn)

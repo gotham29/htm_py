@@ -1,3 +1,4 @@
+import numpy as np
 import unittest
 from htm_py.encoders.rdse import RDSE
 
@@ -15,7 +16,9 @@ class TestRDSE(unittest.TestCase):
     def test_encode_consistency(self):
         e1 = self.encoder.encode(3.7)
         e2 = self.encoder.encode(3.7)
-        self.assertEqual(e1, e2)
+        # self.assertEqual(e1, e2)
+        np.testing.assert_array_equal(e1, e2)
+
 
     def test_encode_different_inputs(self):
         e1 = self.encoder.encode(1.0)

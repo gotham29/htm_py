@@ -23,8 +23,8 @@ if "rdse" in enc_params:
 if "date" in enc_params:
     date_cfg = enc_params["date"]
     ENCODERS["date"] = DateEncoder(
-        timeOfDay=date_cfg.get("encode_time_of_day", (21, 9.49)),
-        weekend=date_cfg.get("weekend", 1)
+        timeOfDay=date_cfg.get("timeOfDay", (21, 9.49)),
+        # weekend=date_cfg.get("weekend", 1)
     )
 
 class TestMultiEncoder(unittest.TestCase):

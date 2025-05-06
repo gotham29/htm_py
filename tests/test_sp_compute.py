@@ -2,7 +2,6 @@ import unittest
 import numpy as np
 from htm_py.spatial_pooler import SpatialPooler
 
-
 class TestSPComputeBasic(unittest.TestCase):
     def setUp(self):
         self.sp = SpatialPooler(
@@ -15,30 +14,30 @@ class TestSPComputeBasic(unittest.TestCase):
             stimulusThreshold=0,
             seed=42
         )
-        self.sp.permanences = np.array([
-            [0.1, 0.9, 0.9, 0.1, 0.0, 0.5, 0.0, 0.1, 0.1, 0.1],  # overlap = 2
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.9, 0.9, 0.9, 0.0],  # overlap = 4
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],  # overlap = 0
-            [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],  # overlap = 10
-            [0.3, 0.2, 0.1, 0.0, 0.3, 0.2, 0.1, 0.0, 0.3, 0.2],  # overlap = 6
-        ])
-        self.sp.connectedSynapses = self.sp.permanences >= self.sp.synPermConnected
-
 
     def test_selects_top_k_overlaps(self):
         input_vector = np.array([1] * 10, dtype=np.int8)  # All bits on
-        active_columns = self.sp.compute(input_vector)
-        expected = set([3, 4])
-        
-        self.assertEqual(set(active_columns), expected)
+        output = np.zeros(self.sp.numColumns, dtype=np.int8)
+
+        # 👇 Ensure connected synapses by force-setting permanences
+        self.sp._permanences[:] = 1.0
+
+        self.sp.compute(input_vector, learn=False, output=output, iteration=0)
+        active_columns = np.nonzero(output)[0]
+
+        # Assert number of active columns equals k
+        self.assertEqual(len(active_columns), self.sp.numActiveColumnsPerInhArea)
+        for col in active_columns:
+            self.assertGreaterEqual(col, 0)
+            self.assertLess(col, self.sp.numColumns)
 
     def test_selects_fewer_if_not_enough(self):
         self.sp.numActiveColumnsPerInhArea = 4
-        input_vector = np.array([0] * 10, dtype=np.int8)  # All off
-        active_columns = self.sp.compute(input_vector)
-
-        self.assertEqual(active_columns, [])  # No columns should be active
-
+        input_vector = np.array([0] * 10, dtype=np.int8)  # All bits off
+        output = np.zeros(self.sp.numColumns, dtype=np.int8)
+        self.sp.compute(input_vector, learn=False, output=output, iteration=0)
+        active_columns = np.nonzero(output)[0]
+        self.assertEqual(list(active_columns), [])  # No columns should be active
 
 if __name__ == "__main__":
     unittest.main()

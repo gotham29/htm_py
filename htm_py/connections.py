@@ -44,6 +44,7 @@ class Connections:
 
 
      # === Synapse Functions ===
+    
     def createSynapse(self, segment: Segment, presynapticCell: CellIdx, permanence: float) -> Synapse:
         """
         Create a new synapse on a segment, pointing to a presynaptic cell.
