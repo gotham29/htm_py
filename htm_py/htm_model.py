@@ -36,23 +36,23 @@ class HTMModel:
             seed=1960,
         )
 
-    def _build_encoder(self, encoder_params):
-        encoders = {}
-        if "rdse" in encoder_params:
-            rdse_cfg = encoder_params["rdse"]
-            encoders["rdse"] = RDSE(
-                n=rdse_cfg.get("n", 150),
-                w=rdse_cfg.get("w", 21),
-                min_val=rdse_cfg.get("min_val", 0.0),
-                max_val=rdse_cfg.get("max_val", 114.4),
-            )
-        if "date" in encoder_params:
-            date_cfg = encoder_params["date"]
-            encoders["date"] = DateEncoder(
-                timeOfDay=date_cfg.get("timeOfDay", (21, 9.49)),
-                # weekend=date_cfg.get("weekend", 1)
-            )
-        return MultiEncoder(encoders)
+    # def _build_encoder(self, encoder_params):
+    #     encoders = {}
+    #     if "rdse" in encoder_params:
+    #         rdse_cfg = encoder_params["rdse"]
+    #         encoders["rdse"] = RDSE(
+    #             n=rdse_cfg.get("n", 150),
+    #             w=rdse_cfg.get("w", 21),
+    #             min_val=rdse_cfg.get("min_val", 0.0),
+    #             max_val=rdse_cfg.get("max_val", 114.4),
+    #         )
+    #     if "date" in encoder_params:
+    #         date_cfg = encoder_params["date"]
+    #         encoders["date"] = DateEncoder(
+    #             timeOfDay=date_cfg.get("timeOfDay", (21, 9.49)),
+    #             weekend=date_cfg.get("weekend", (2, 1))
+    #         )
+    #     return MultiEncoder(encoders)
 
     def reset(self):
         self.tm.reset()

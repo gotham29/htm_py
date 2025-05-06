@@ -1,13 +1,19 @@
 import os
 import csv
+import sys
 import numpy as np
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from htm_py.htm_model import HTMModel
 from htm_py.encoders.rdse import RDSE
 from htm_py.encoders.date import DateEncoder
 from htm_py.encoders.multi import MultiEncoder
 import datetime
 
-def load_dataset(path):
+def load_dataset(filename):
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    path = os.path.join(base_dir, "data", filename)
     with open(path, 'r') as f:
         reader = csv.DictReader(f)
         timestamps = []
@@ -18,7 +24,7 @@ def load_dataset(path):
     return timestamps, values
 
 def main():
-    timestamps, values = load_dataset("data/NAB_art_daily_jumpsup.csv")
+    timestamps, values = load_dataset("NAB_art_daily_jumpsup.csv")
 
     rdse = RDSE(min_val=0, max_val=114.4, resolution=0.88, n=130, w=21)
     date_enc = DateEncoder(timeOfDay=(21, 9.49))

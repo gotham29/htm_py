@@ -40,6 +40,8 @@ class Connections:
         self._next_segment_id = 0
         self._next_synapse_id = 0
 
+        self._sequence_segments: Dict[Segment, bool] = {}
+
         # Note: Not thread-safe — external locking required in concurrent environments.
 
 
@@ -126,11 +128,10 @@ class Connections:
         return self._synapse_data[synapse]
 
     # === Segment & Cell Helpers ===
-    def createSegment(self, cell: CellIdx) -> Segment:
+    def createSegment(self, cell: CellIdx, sequence: bool = False) -> Segment:
         """
         Create a new segment on the given cell.
-        Raises IndexError if cell is out of range.
-        Raises TypeError if cell is not an integer.
+        `sequence=True` means this segment is part of a learned temporal sequence.
         """
         if not isinstance(cell, int):
             raise TypeError("Cell index must be an integer.")
@@ -145,6 +146,7 @@ class Connections:
         self._segments_for_cell[cell].append(segment)
         self._cell_for_segment[segment] = cell
         self._synapses_for_segment[segment] = []
+        self._sequence_segments[segment] = sequence  # ← Track if this is a sequence segment
 
         return segment
 
@@ -221,3 +223,12 @@ class Connections:
             if self.dataForSynapse(s).presynapticCell in active_cells
             and self.dataForSynapse(s).permanence >= connected_permanence
         ]
+
+    def is_sequence_segment(self, segment: Segment) -> bool:
+        """
+        Return True if the segment is a sequence segment.
+        Raises KeyError if segment does not exist.
+        """
+        if segment not in self._sequence_segments:
+            raise KeyError(f"Segment {segment} not found in sequence tracker")
+        return self._sequence_segments[segment]
