@@ -167,32 +167,23 @@ class TemporalMemory:
                     self.winnerCellForColumn[column] = cell
 
     def _predict_cells(self):
-        self.predictiveCells = set()
-        self.activeSegments = set()
+        """Evaluate segments and mark predictive cells."""
+        self.predictiveCells.clear()
 
-        print("[PREDICT] Checking all sequence segments for predictive activation...")
-        for segment in self.connections.segments():
-            if not self.connections.is_sequence_segment(segment):
-                continue
+        for cell in range(self.numCells):
+            for seg in self.connections.segmentsForCell(cell):
+                active = 0
+                for syn in self.connections.synapsesForSegment(seg):
+                    syn_data = self.connections.dataForSynapse(syn)
+                    if syn_data.permanence >= self.connectedPermanence and syn_data.presynapticCell in self.prevActiveCells:
+                        active += 1
 
-            presynaptic_cells = self.prevActiveCells
-            active_syns = self.connections.active_synapses(
-                segment, presynaptic_cells, self.connectedPermanence
-            )
+                if active >= self.activationThreshold:
+                    self.predictiveCells.add(cell)
 
-            cell = self.connections.cell_for_segment(segment)
-            overlap = len(active_syns)
-            required = self.activationThreshold
-
-            if overlap >= required:
-                self.predictiveCells.add(cell)
-                self.activeSegments.add(segment)
-                self.segmentActiveForCell[cell] = segment
-                print(f"[PREDICT] ✅ Segment {segment} activates cell {cell} (overlap={overlap})")
-            else:
-                print(f"[PREDICT] ❌ Segment {segment} insufficient overlap (overlap={overlap} < {required})")
-
-        print(f"[PREDICT] Final predictive cells: {sorted(self.predictiveCells)}")
+                    print(f"[TM Predict] Cell {cell} → predictive via segment {seg} with {active} active synapses")
+                else:
+                    print(f"[TM Predict] Cell {cell} NOT predictive (only {active} active synapses on segment {seg})")
 
     def _learn_segments(self, activeColumns: List[int], prevWinnerCells: Set[int]) -> None:
         print(f"[LEARN] prevWinnerCells: {sorted(prevWinnerCells)}")
@@ -265,6 +256,35 @@ class TemporalMemory:
                     delta = 0.0
             new_perm = min(max(permanence + delta, 0.0), 1.0)
             conn.updateSynapsePermanence(synapse, new_perm)
+
+    def _adapt_segment(
+        self,
+        connections,
+        segment,
+        activePresynapticCells,
+        newSynapseCount,
+        increment,
+        decrement
+    ):
+        """
+        Adjust permanence of synapses on a segment based on active presynaptic cells.
+        """
+        synapses = connections.synapsesForSegment(segment)
+        for syn in synapses:
+            data = connections.dataForSynapse(syn)
+            if data.presynapticCell in activePresynapticCells:
+                new_perm = min(1.0, data.permanence + increment)
+            else:
+                new_perm = max(0.0, data.permanence - decrement)
+            connections.updateSynapsePermanence(syn, new_perm)
+
+        # Optionally grow new synapses
+        if newSynapseCount > 0:
+            existing = {connections.dataForSynapse(s).presynapticCell for s in synapses}
+            potential = list(activePresynapticCells - existing)
+            new_cells = potential[:newSynapseCount]
+            for cell in new_cells:
+                connections.createSynapse(segment, cell, self.initialPermanence)
 
     def reset(self):
         self.activeCells.clear()

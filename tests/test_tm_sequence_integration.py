@@ -119,5 +119,6 @@ class TestTMSequenceIntegration(unittest.TestCase):
         for s in scores:
             self.assertLess(s, 0.5, f"Score too high after learning: {s:.3f}")
 
+
 if __name__ == "__main__":
     unittest.main()

@@ -65,6 +65,7 @@ class TestPredictCells(unittest.TestCase):
         cells = self.tm._cells_for_column(0)
         seg1 = self.conn.createSegment(cells[0])
         seg2 = self.conn.createSegment(cells[1])
+
         self.conn.createSynapse(seg1, cells[2], 0.3)
         self.conn.createSynapse(seg1, cells[3], 0.3)
         self.conn.createSynapse(seg2, cells[2], 0.3)
@@ -72,7 +73,25 @@ class TestPredictCells(unittest.TestCase):
 
         self.tm.activeCells = {cells[2], cells[3]}
         self.tm.prevActiveCells = self.tm.activeCells.copy()
+
+        print("\n[Test] Active cells:", sorted(self.tm.activeCells))
+        print("[Test] Testing cell:", cells[0])
+        print("[Test] Synapses for segment", seg1, "→", [
+            (s, self.conn.dataForSynapse(s).presynapticCell,
+            self.conn.dataForSynapse(s).permanence)
+            for s in self.conn.synapsesForSegment(seg1)
+        ])
+
+        print("[Test] Synapses for segment", seg2, "→", [
+            (s, self.conn.dataForSynapse(s).presynapticCell,
+            self.conn.dataForSynapse(s).permanence)
+            for s in self.conn.synapsesForSegment(seg2)
+        ])
+
         self.tm._predict_cells()
+
+        print("[Test] Predictive cells:", sorted(self.tm.predictiveCells))
+
         self.assertIn(cells[0], self.tm.predictiveCells)
         self.assertIn(cells[1], self.tm.predictiveCells)
 
