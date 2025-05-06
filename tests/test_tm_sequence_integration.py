@@ -1,16 +1,16 @@
-import logging
+# import logging
 import unittest
 from htm_py.temporal_memory import TemporalMemory
 
 # Setup logger for debugging during tests
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler("tm_debug.log"),
-        logging.StreamHandler()
-    ]
-)
+# logging.basicConfig(
+#     level=logging.DEBUG,
+#     format="%(asctime)s [%(levelname)s] %(message)s",
+#     handlers=[
+#         logging.FileHandler("tm_debug.log"),
+#         logging.StreamHandler()
+#     ]
+# )
 
 
 class TestTMSequenceIntegration(unittest.TestCase):

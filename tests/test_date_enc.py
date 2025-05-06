@@ -33,7 +33,7 @@ class TestDateEncoder(unittest.TestCase):
         self.assertTrue(np.any(e1 != e2))
 
     def test_empty_encoder(self):
-        no_enc = DateEncoder(timeOfDay=None, dayOfWeek=None, weekend=False)
+        no_enc = DateEncoder(timeOfDay=None, dayOfWeek=None, weekend=None)
         dt = datetime.datetime.now()
         encoding = no_enc.encode(dt)
         self.assertEqual(len(encoding), 0)

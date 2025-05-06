@@ -1,24 +1,25 @@
-import logging
+import numpy as np
+# import logging
+from typing import Union
 from typing import Set, List
 from htm_py.connections import Connections
 
-logger = logging.getLogger("htm_py.tm")
-logger.setLevel(logging.DEBUG)
-
+# logger = logging.getLogger("htm_py.tm")
+# logger.setLevel(logging.DEBUG)
 
 class TemporalMemory:
     def __init__(self,
-                 columnDimensions,
-                 cellsPerColumn,
-                 activationThreshold,
-                 initialPermanence,
-                 connectedPermanence,
-                 minThreshold,
-                 maxNewSynapseCount,
-                 permanenceIncrement,
-                 permanenceDecrement,
-                 predictedSegmentDecrement,
-                 seed=None,
+                seed=None,
+                 columnDimensions=(2048,),
+                 cellsPerColumn=32,
+                 activationThreshold=13,
+                 initialPermanence=0.21,
+                 connectedPermanence=0.5,
+                 minThreshold=10,
+                 permanenceIncrement=0.1,
+                 permanenceDecrement=0.1,
+                 predictedSegmentDecrement=0,
+                 maxNewSynapseCount=20,
                  maxSegmentsPerCell=255,
                  maxSynapsesPerSegment=255):
         self.columnDimensions = columnDimensions
@@ -54,13 +55,19 @@ class TemporalMemory:
         self.segmentActiveForCell = {}
         self.winnerCellForColumn = {}
 
-        logger.info("TemporalMemory initialized with %d columns, %d cells total",
-                    self.numColumns, self.numCells)
+        # logger.info("TemporalMemory initialized with %d columns, %d cells total",
+        #             self.numColumns, self.numCells)
 
-    def compute(self, activeColumns: List[int], learn: bool = True):
-        if not isinstance(activeColumns, list) or not all(isinstance(i, int) for i in activeColumns):
-            raise TypeError("activeColumns must be a list of integers")
-
+    def compute(self, activeColumns: Union[list[int], np.ndarray], learn: bool = True):
+        if isinstance(activeColumns, np.ndarray):
+            if not np.issubdtype(activeColumns.dtype, np.integer):
+                raise TypeError("activeColumns must be a list or array of integers")
+            activeColumns = activeColumns.tolist()
+        elif isinstance(activeColumns, list):
+            if not all(isinstance(i, int) for i in activeColumns):
+                raise TypeError("activeColumns must be a list or array of integers")
+        else:
+            raise TypeError("activeColumns must be a list or array of integers")
         self.learn = learn
         self.activeColumns = activeColumns
         self._activate_columns()
@@ -69,7 +76,7 @@ class TemporalMemory:
         self._predict_cells()
 
         # logger.debug(f"[COMPUTE] Winner cells: {sorted(self.winnerCells)}")
-        logger.debug(f"[COMPUTE] Predictive cells: {sorted(self.predictiveCells)}")
+        # logger.debug(f"[COMPUTE] Predictive cells: {sorted(self.predictiveCells)}")
 
         anomaly_score = self.calculate_anomaly_score()
         prediction_count = self.calculate_prediction_count()

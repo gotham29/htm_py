@@ -39,5 +39,5 @@ class RDSE:
         output[start:end] = 1
         return output
 
-    def get_width(self):
+    def getWidth(self):
         return self.n

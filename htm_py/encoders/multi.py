@@ -9,9 +9,11 @@ class MultiEncoder:
         self._field_slices = {}
         self._total_width = 0
 
-        # Validate encoder widths and record slices
         start = 0
         for name, encoder in self.field_encoders.items():
+            if encoder is None:
+                raise ValueError(f"Encoder for '{name}' is None. Please instantiate all encoders before passing.")
+
             if hasattr(encoder, "getWidth"):
                 width = encoder.getWidth()
             elif hasattr(encoder, "get_width"):
@@ -20,19 +22,20 @@ class MultiEncoder:
                 raise ValueError(f"Encoder for '{name}' missing getWidth() method")
 
             self._field_slices[name] = slice(start, start + width)
+            self._total_width += width
             start += width
-        self._total_width = start
-
-    def encode(self, input_dict):
-        result = np.zeros(self._total_width)
-
-        for name, encoder in self.field_encoders.items():
-            if name not in input_dict:
-                raise KeyError(f"Missing input field: '{name}'")
-            encoded = encoder.encode(input_dict[name])
-            result[self._field_slices[name]] = encoded
-
-        return result
 
     def getWidth(self):
         return self._total_width
+
+    def encode(self, values: dict):
+        """
+        values: dict of {field_name: input_value}
+        """
+        encoded_fields = []
+        for name, encoder in self.field_encoders.items():
+            if name not in values:
+                raise ValueError(f"Missing value for encoder field '{name}'")
+            encoded = encoder.encode(values[name])
+            encoded_fields.append(encoded)
+        return np.concatenate(encoded_fields)

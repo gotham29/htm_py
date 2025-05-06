@@ -56,7 +56,7 @@ class TestMultiEncoder(unittest.TestCase):
         np.testing.assert_array_equal(out1, out2)
 
     def test_missing_key_raises(self):
-        with self.assertRaises(KeyError):
+        with self.assertRaises(ValueError):
             self.encoder.encode({"feature1": 10})  # Missing feature2 and timestamp
 
 if __name__ == "__main__":
