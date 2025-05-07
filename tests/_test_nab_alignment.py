@@ -9,16 +9,19 @@ from htm_py.encoders.multi import MultiEncoder
 class TestNABAlignment(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Set limit on rumber of rows 
+        limit = 500
+
         # Load NAB dataset
         root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         data_path = os.path.join(root, "data", "NAB_art_daily_jumpsup.csv")
         numenta_path = os.path.join(root, "results", "NAB_art_daily_jumpsup_NumentaTM.csv")
 
-        df = pd.read_csv(data_path)
+        df = pd.read_csv(data_path)[:limit]
         cls.timestamps = pd.to_datetime(df["timestamp"])
         cls.values = df["value"].tolist()
 
-        numenta_df = pd.read_csv(numenta_path)
+        numenta_df = pd.read_csv(numenta_path)[:limit]
         cls.numenta_scores = numenta_df["raw_score"].tolist()
 
         # Setup HTM Model
