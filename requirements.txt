@@ -1,4 +1,5 @@
 numpy>=1.19.5
 matplotlib>=3.3.4
 pytest>=7.2.1
-scipy
+scipy>=1.7.3
+scikit-learn>=1.0.2

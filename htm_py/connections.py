@@ -1,8 +1,11 @@
-# htm_py/connections.py
-
 from typing import List, Dict, Tuple, NamedTuple
 import math
 import numpy as np
+
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 CellIdx = int
 Segment = int
