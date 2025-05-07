@@ -73,27 +73,6 @@ class Connections:
 
         return synapse
 
-    # def destroySynapse(self, synapse: Synapse) -> None:
-    #     """
-    #     Remove synapse from all tracking structures.
-    #     Raises KeyError if synapse doesn't exist.
-    #     """
-    #     if synapse not in self._synapse_data:
-    #         raise KeyError(f"Cannot destroy nonexistent synapse ID {synapse}")
-
-    #     # Remove from synapse list on its segment
-    #     found = False
-    #     for seg, syn_list in self._synapses_for_segment.items():
-    #         if synapse in syn_list:
-    #             syn_list.remove(synapse)
-    #             found = True
-    #             break
-    #     if not found:
-    #         raise RuntimeError(f"Synapse {synapse} not found in any segment")
-
-    #     # Remove from synapse data
-    #     del self._synapse_data[synapse]
-
     def destroySynapse(self, synapse: Synapse) -> None:
         """
         Remove a synapse from its segment and all internal tracking structures.
@@ -137,46 +116,6 @@ class Connections:
             data = self._synapse_data[synapse]
             self._synapse_data[synapse] = SynapseData(data.presynapticCell, new_perm)
 
-
-    # def updateSynapsePermanence(self, synapse: Synapse, new_permanence: float) -> None:
-    #     """
-    #     Update the permanence value of a synapse.
-    #     Raises KeyError if synapse doesn't exist.
-    #     Raises ValueError if permanence is not finite.
-    #     """
-    #     if synapse not in self._synapse_data:
-    #         raise KeyError(f"Synapse ID {synapse} not found")
-    #     if not isinstance(new_permanence, float):
-    #         raise TypeError("Permanence must be a float.")
-    #     if not math.isfinite(new_permanence):
-    #         raise ValueError("Permanence must be a finite number.")
-
-    #     old = self._synapse_data[synapse]
-    #     self._synapse_data[synapse] = SynapseData(old.presynapticCell, new_permanence)
-
-    # def updateSynapsePermanence(self, synapse, delta):
-    #     """
-    #     Adjust the permanence of the given synapse by delta.
-    #     - Permanence is clamped between [0.0, 1.0]
-    #     - If the new permanence is <= 0.0, the synapse is destroyed (NAB-compliant)
-    #     """
-    #     if synapse not in self._synapse_data:
-    #         raise KeyError(f"Synapse ID {synapse} not found")
-
-    #     current_perm = self._synapse_data[synapse].permanence
-    #     new_perm = current_perm + delta
-
-    #     if np.isnan(new_perm):
-    #         raise ValueError("New permanence value is NaN")
-
-    #     new_perm = max(0.0, min(1.0, new_perm))  # Clamp
-
-    #     if new_perm == 0.0:
-    #         self.destroySynapse(synapse)
-    #     else:
-    #         self._synapse_data[synapse] = self._synapse_data[synapse]._replace(
-    #             permanence=new_perm
-    #         )
 
     def setSynapsePermanence(self, synapse: Synapse, new_permanence: float) -> None:
         """
