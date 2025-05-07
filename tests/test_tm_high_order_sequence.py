@@ -171,10 +171,10 @@ class TestHighOrderSequence(unittest.TestCase):
         seg3 = tm.segmentActiveForCell[0]
         assert seg3 != seg1, "Different context should yield new segment"
 
-    def test_partial_context_still_adapts_segment(self):
-        """Numenta adapts segment if overlap ≥ minThreshold even if context not exact."""
+    def test_partial_context_creates_new_segment_when_context_differs(self):
+        """Segments should NOT be reused if context differs, even if overlap ≥ minThreshold."""
         tm = TemporalMemory(
-            columnDimensions=(1,), cellsPerColumn=16,  # Increase cell count to allow 10+
+            columnDimensions=(1,), cellsPerColumn=16,
             activationThreshold=1, minThreshold=1,
             initialPermanence=0.21, connectedPermanence=0.2,
             permanenceIncrement=0.1, permanenceDecrement=0.0,
@@ -184,19 +184,20 @@ class TestHighOrderSequence(unittest.TestCase):
         cell = 0
         tm.winnerCellForColumn[0] = cell
 
-        # First context (learn segment)
+        # Step 1: Learn full context
         context1 = {10, 11}
         tm.prevWinnerCells = context1
         tm._learn_segments([0], context1)
         seg1 = tm.segmentActiveForCell[cell]
 
-        # New but overlapping context
+        # Step 2: New context overlaps but not identical
         context2 = {10}
         tm.prevWinnerCells = context2
         tm._learn_segments([0], context2)
         seg2 = tm.segmentActiveForCell[cell]
 
-        assert seg1 == seg2, "Expected adaptation of same segment due to overlap ≥ minThreshold"
+        # ✅ Expect a new segment (context mismatch → no reuse)
+        assert seg1 != seg2, "Expected a new segment when context only partially overlaps"
 
     def test_ABC_only_predicts_D(self):
         """After training on A→B→C→D and X→B→C→Y, ensure A→B→C only predicts D (col 3)."""
@@ -227,6 +228,57 @@ class TestHighOrderSequence(unittest.TestCase):
 
         # ✅ Only D (col 3) should be predicted
         self.assertEqual(predicted_cols, {3}, f"Only D (col 3) should be predicted, got {predicted_cols}")
+
+    def test_segments_on_C_after_branches(self):
+        """Inspect segments on column C (2) after training A→B→C→D and X→B→C→Y.
+        Ensures separate segments form on different winner cells for C depending on context.
+        """
+        self.tm = TemporalMemory(
+            columnDimensions=(6,), cellsPerColumn=4,
+            activationThreshold=1, minThreshold=1,
+            initialPermanence=0.21, connectedPermanence=0.2,
+            permanenceIncrement=0.1, permanenceDecrement=0.0,
+            maxNewSynapseCount=10
+        )
+
+        def run(seq, learn=True):
+            self._run_sequence(seq, learn=learn)
+
+        # Train both branches
+        for _ in range(3):
+            run([0, 1, 2, 3])  # A→B→C→D
+            self.tm.reset()
+            run([4, 1, 2, 5])  # X→B→C→Y
+            self.tm.reset()
+
+        # Get cells for column C (index 2)
+        colC_cells = self.tm._cells_for_column(2)
+
+        # Print segments and contexts on each cell
+        found = []
+        for cell in colC_cells:
+            segments = self.tm.connections.segmentsForCell(cell)
+            if not segments:
+                continue
+            for seg in segments:
+                syns = self.tm.connections.synapsesForSegment(seg)
+                srcs = [self.tm.connections.dataForSynapse(s).presynapticCell for s in syns]
+                found.append((cell, seg, sorted(srcs)))
+                print(f"[C SEGMENTS] Cell {cell}, Segment {seg}, Context {sorted(srcs)}")
+
+        # Assert we have at least 2 segments on distinct cells (branching)
+        unique_cells = {cell for cell, _, _ in found}
+        self.assertGreaterEqual(len(unique_cells), 2, "Expected at least 2 unique cells in column C due to branching")
+
+        # Check that at least one segment includes presynaptic cell from A-context, one from X-context
+        A_context = set(self.tm._cells_for_column(0))  # Column A
+        X_context = set(self.tm._cells_for_column(4))  # Column X
+
+        has_A_branch = any(any(src in A_context for src in ctx) for _, _, ctx in found)
+        has_X_branch = any(any(src in X_context for src in ctx) for _, _, ctx in found)
+
+        self.assertTrue(has_A_branch, "Expected one segment on C from A-context")
+        self.assertTrue(has_X_branch, "Expected one segment on C from X-context")
 
 
 if __name__ == '__main__':
