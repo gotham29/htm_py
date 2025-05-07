@@ -171,6 +171,63 @@ class TestHighOrderSequence(unittest.TestCase):
         seg3 = tm.segmentActiveForCell[0]
         assert seg3 != seg1, "Different context should yield new segment"
 
+    def test_partial_context_still_adapts_segment(self):
+        """Numenta adapts segment if overlap ≥ minThreshold even if context not exact."""
+        tm = TemporalMemory(
+            columnDimensions=(1,), cellsPerColumn=16,  # Increase cell count to allow 10+
+            activationThreshold=1, minThreshold=1,
+            initialPermanence=0.21, connectedPermanence=0.2,
+            permanenceIncrement=0.1, permanenceDecrement=0.0,
+            maxNewSynapseCount=10
+        )
+
+        cell = 0
+        tm.winnerCellForColumn[0] = cell
+
+        # First context (learn segment)
+        context1 = {10, 11}
+        tm.prevWinnerCells = context1
+        tm._learn_segments([0], context1)
+        seg1 = tm.segmentActiveForCell[cell]
+
+        # New but overlapping context
+        context2 = {10}
+        tm.prevWinnerCells = context2
+        tm._learn_segments([0], context2)
+        seg2 = tm.segmentActiveForCell[cell]
+
+        assert seg1 == seg2, "Expected adaptation of same segment due to overlap ≥ minThreshold"
+
+    def test_ABC_only_predicts_D(self):
+        """After training on A→B→C→D and X→B→C→Y, ensure A→B→C only predicts D (col 3)."""
+        self.tm = TemporalMemory(
+            columnDimensions=(6,), cellsPerColumn=4,
+            activationThreshold=1, minThreshold=1,
+            initialPermanence=0.21, connectedPermanence=0.2,
+            permanenceIncrement=0.1, permanenceDecrement=0.0,
+            maxNewSynapseCount=10
+        )
+
+        def run(seq, learn=True): self._run_sequence(seq, learn=learn)
+
+        # Train A → B → C → D
+        for _ in range(3):
+            run([0, 1, 2, 3])
+            self.tm.reset()
+
+        # Train X → B → C → Y
+        for _ in range(3):
+            run([4, 1, 2, 5])
+            self.tm.reset()
+
+        # Test A → B → C
+        run([0, 1, 2], learn=False)
+        predicted_cols = {cell // self.tm.cellsPerColumn for cell in self.tm.predictiveCells}
+        print(f"[ASSERT] After A→B→C, predicted columns: {predicted_cols}")
+
+        # ✅ Only D (col 3) should be predicted
+        self.assertEqual(predicted_cols, {3}, f"Only D (col 3) should be predicted, got {predicted_cols}")
+
 
 if __name__ == '__main__':
     unittest.main()

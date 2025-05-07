@@ -205,25 +205,6 @@ class TemporalMemory:
 
         return activeCells, winnerCells
 
-    def _predict_cells(self):
-        self.predictiveCells.clear()
-        self.activeSegments.clear()
-        self.predictedSegmentForCell.clear()
-
-        for cell in range(self.numCells):
-            for segment in self.connections.segmentsForCell(cell):
-                synapses = self.connections.synapsesForSegment(segment)
-                active_count = sum(
-                    1 for s in synapses
-                    if self.connections.dataForSynapse(s).permanence >= self.connectedPermanence and
-                    self.connections.dataForSynapse(s).presynapticCell in self.prevActiveCells
-                )
-                if active_count >= self.activationThreshold:
-                    self.predictiveCells.add(cell)
-                    self.predictedSegmentForCell[cell] = segment
-                    self.activeSegments.add(segment)  # ✅ important for learning phase
-                    break
-
     def _learn_segments(self, activeColumns: List[int], prevWinnerCells: Set[int]) -> None:
         context_key = frozenset(prevWinnerCells)
 
@@ -232,10 +213,14 @@ class TemporalMemory:
             if learningCell is None or not prevWinnerCells:
                 continue
 
-            # Check if we have already created a segment for this context and cell
+            # Allow learning even if cell was not predicted
+            if learningCell not in self.prevPredictiveCells:
+                logger.debug(f"[LEARN] Cell {learningCell} was not predicted — learning on burst cell")
+
+            # 1️⃣ Exact context match → reuse known segment
             if learningCell in self.contextMemory[context_key]:
                 segment = self.contextMemory[context_key][learningCell]
-                logger.debug(f"[TRACE] ✅ Reusing known segment {segment} on cell {learningCell} from context {sorted(prevWinnerCells)}")
+                logger.debug(f"[REUSE] Exact context → reusing segment {segment} on cell {learningCell}")
                 active_synapses = [
                     s for s in self.connections.synapsesForSegment(segment)
                     if self.connections.dataForSynapse(s).presynapticCell in prevWinnerCells
@@ -249,38 +234,30 @@ class TemporalMemory:
                 self.segmentActiveForCell[learningCell] = segment
                 continue
 
-            # Otherwise, try to find a matching segment
+            # 2️⃣ Best-matching segment with sufficient overlap → reuse even if context differs
             bestSegment, overlap = getBestMatchingSegment(
-                self.connections, learningCell, set(prevWinnerCells),
+                self.connections, learningCell, prevWinnerCells,
                 self.minThreshold, self.connectedPermanence, return_overlap=True
             )
 
             if bestSegment is not None and overlap >= self.minThreshold:
-                existing_sources = {
-                    self.connections.dataForSynapse(s).presynapticCell
-                    for s in self.connections.synapsesForSegment(bestSegment)
-                }
+                logger.debug(f"[REUSE] Partial context → reusing segment {bestSegment} (overlap={overlap}) on cell {learningCell}")
+                active_synapses = [
+                    s for s in self.connections.synapsesForSegment(bestSegment)
+                    if self.connections.dataForSynapse(s).presynapticCell in prevWinnerCells
+                ]
+                self.adaptSegment(
+                    self.connections, bestSegment, active_synapses,
+                    positiveReinforcement=True,
+                    permanenceIncrement=self.permanenceIncrement,
+                    permanenceDecrement=self.permanenceDecrement
+                )
+                self.segmentActiveForCell[learningCell] = bestSegment
+                self.contextMemory[context_key][learningCell] = bestSegment
+                continue
 
-                if existing_sources == prevWinnerCells:
-                    active_synapses = [
-                        s for s in self.connections.synapsesForSegment(bestSegment)
-                        if self.connections.dataForSynapse(s).presynapticCell in prevWinnerCells
-                    ]
-                    self.adaptSegment(
-                        self.connections, bestSegment, active_synapses,
-                        positiveReinforcement=True,
-                        permanenceIncrement=self.permanenceIncrement,
-                        permanenceDecrement=self.permanenceDecrement
-                    )
-                    logger.debug(f"[TRACE] 🔄 Reusing best segment {bestSegment} with exact context on cell {learningCell}")
-                    self.segmentActiveForCell[learningCell] = bestSegment
-                    self.contextMemory[context_key][learningCell] = bestSegment
-                    continue
-                else:
-                    logger.debug(f"[TRACE] ❌ Not reusing best segment {bestSegment} on cell {learningCell}: context mismatch")
-
-            # No matching segment — grow a new one
-            logger.debug(f"[TRACE] ➕ Creating new segment on cell {learningCell} for context {sorted(prevWinnerCells)}")
+            # 3️⃣ No reusable segment → grow new one
+            logger.debug(f"[GROW] Creating new segment on cell {learningCell} for context {sorted(prevWinnerCells)}")
             newSegment = self.connections.createSegment(learningCell, sequence=True)
             growSynapsesToSegment(
                 self.connections,
@@ -291,6 +268,30 @@ class TemporalMemory:
             )
             self.segmentActiveForCell[learningCell] = newSegment
             self.contextMemory[context_key][learningCell] = newSegment
+
+    def _predict_cells(self):
+        self.predictiveCells.clear()
+
+        for cell in range(self.numCells):
+            for segment in self.connections.segmentsForCell(cell):
+                # 🔒 Only use sequence segments to drive prediction
+                if not self.connections.segmentIsSequence(segment):
+                    continue
+
+                synapses = self.connections.synapsesForSegment(segment)
+                active_count = sum(
+                    1 for s in synapses
+                    if self.connections.dataForSynapse(s).presynapticCell in self.prevActiveCells and
+                    self.connections.dataForSynapse(s).permanence >= self.connectedPermanence
+                )
+                if active_count >= self.activationThreshold:
+                    self.predictiveCells.add(cell)
+                    self.predictedSegmentForCell[cell] = segment
+                    logger.debug(
+                        f"[PREDICT] cell {cell} ← segment {segment}, "
+                        f"overlap={active_count}, from {[self.connections.dataForSynapse(s).presynapticCell for s in synapses if self.connections.dataForSynapse(s).presynapticCell in self.prevActiveCells]}"
+                    )
+                    break
 
     def adaptSegment(self, conn, segment, activeSynapses, positiveReinforcement,
                     permanenceIncrement=0.05, permanenceDecrement=0.05):
@@ -342,6 +343,10 @@ class TemporalMemory:
             for cell in new_cells:
                 connections.createSynapse(segment, cell, self.initialPermanence)
             logger.debug(f"[TemporalMemory._adapt_segment] segment: {segment} new_cells: {new_cells}")
+
+    def _set_if_unassigned(self, d: dict, key, value):
+        if key not in d or d[key] is None:
+            d[key] = value
 
     def reset(self):
         self.activeCells.clear()

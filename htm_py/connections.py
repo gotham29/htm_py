@@ -265,3 +265,10 @@ class Connections:
         if segment not in self._sequence_segments:
             raise KeyError(f"Segment {segment} not found in sequence tracker")
         return self._sequence_segments[segment]
+    
+    def segmentIsSequence(self, segment: int) -> bool:
+        """
+        Returns True if the given segment is marked as a sequence segment.
+        """
+        return self._sequence_segments[segment]
+
