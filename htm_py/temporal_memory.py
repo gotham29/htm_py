@@ -111,8 +111,9 @@ class TemporalMemory:
         return score
 
     def calculate_prediction_count(self):
-        prediction_count = len(self.prevPredictiveCells) / len(self.activeColumns)
-        return prediction_count
+        if not self.activeColumns:
+            return 0.0  # Avoid divide-by-zero when no active columns
+        return len(self.prevPredictiveCells) / len(self.activeColumns)
 
     def _cells_for_column(self, col):
         start = col * self.cellsPerColumn
@@ -167,23 +168,22 @@ class TemporalMemory:
                     self.winnerCellForColumn[column] = cell
 
     def _predict_cells(self):
-        """Evaluate segments and mark predictive cells."""
         self.predictiveCells.clear()
+        self.segmentActiveForCell.clear()
 
         for cell in range(self.numCells):
-            for seg in self.connections.segmentsForCell(cell):
-                active = 0
-                for syn in self.connections.synapsesForSegment(seg):
-                    syn_data = self.connections.dataForSynapse(syn)
-                    if syn_data.permanence >= self.connectedPermanence and syn_data.presynapticCell in self.prevActiveCells:
-                        active += 1
-
-                if active >= self.activationThreshold:
+            segments = self.connections.segmentsForCell(cell)
+            for segment in segments:
+                synapses = self.connections.synapsesForSegment(segment)
+                active_count = sum(
+                    1 for s in synapses
+                    if self.connections.dataForSynapse(s).presynapticCell in self.prevActiveCells and
+                    self.connections.dataForSynapse(s).permanence >= self.connectedPermanence
+                )
+                if active_count >= self.activationThreshold:
                     self.predictiveCells.add(cell)
-
-                    print(f"[TM Predict] Cell {cell} → predictive via segment {seg} with {active} active synapses")
-                else:
-                    print(f"[TM Predict] Cell {cell} NOT predictive (only {active} active synapses on segment {seg})")
+                    self.segmentActiveForCell[cell] = segment
+                    break  # ✅ stop after first matching segment
 
     def _learn_segments(self, activeColumns: List[int], prevWinnerCells: Set[int]) -> None:
         print(f"[LEARN] prevWinnerCells: {sorted(prevWinnerCells)}")
