@@ -13,8 +13,8 @@ class TestTMPhase3Prediction(unittest.TestCase):
 
     def test_predicts_cells_with_connected_synapses_from_prev_active(self):
         cell = 0
-        seg = self.tm.connections.createSegment(cell)
-        for src in [4, 5]:  # Assume these were active last time
+        seg = self.tm.connections.createSegment(cell, sequence=True)
+        for src in [4, 5]:
             self.tm.connections.createSynapse(seg, src, 0.3)
 
         self.tm.prevActiveCells = {4, 5}
@@ -36,8 +36,8 @@ class TestTMPhase3Prediction(unittest.TestCase):
         self.assertNotIn(cell, self.tm.predictiveCells)
 
     def test_multiple_cells_get_predicted(self):
-        seg1 = self.tm.connections.createSegment(0)
-        seg2 = self.tm.connections.createSegment(1)
+        seg1 = self.tm.connections.createSegment(0, sequence=True)
+        seg2 = self.tm.connections.createSegment(1, sequence=True)
 
         self.tm.connections.createSynapse(seg1, 3, 0.3)
         self.tm.connections.createSynapse(seg2, 3, 0.3)
@@ -65,6 +65,44 @@ class TestTMPhase3Prediction(unittest.TestCase):
 
         self.assertNotIn(0, self.tm.predictiveCells)
 
+    def test_cell_becomes_predictive_when_connected_synapses_exceed_threshold(self):
+        cell = 5
+        seg = self.tm.connections.createSegment(cell, sequence=True)
+        self.tm.connections.createSynapse(seg, 10, permanence=0.25)
+        self.tm.connections.createSynapse(seg, 11, permanence=0.25)
+
+        self.tm.activationThreshold = 2
+        self.tm.prevActiveCells = {10, 11}
+        self.tm._predict_cells()
+
+        self.assertIn(cell, self.tm.predictiveCells)
+
+    def test_cell_does_not_become_predictive_with_insufficient_overlap(self):
+        cell = 6
+        seg = self.tm.connections.createSegment(cell)
+        self.tm.connections.createSynapse(seg, 10, permanence=0.25)
+        self.tm.connections.createSynapse(seg, 11, permanence=0.25)
+
+        self.tm.activationThreshold = 2
+        self.tm.prevActiveCells = {10}
+        self.tm._predict_cells()
+
+        self.assertNotIn(cell, self.tm.predictiveCells)
+
+    def test_non_sequence_segment_does_not_predict(self):
+        cell = 7
+        seg = self.tm.connections.createSegment(cell, sequence=False)
+        self.tm.connections.createSynapse(seg, 10, permanence=0.3)
+        self.tm.connections.createSynapse(seg, 11, permanence=0.3)
+
+        self.tm.prevActiveCells = {10, 11}
+        self.tm._predict_cells()
+
+        self.assertNotIn(cell, self.tm.predictiveCells)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
