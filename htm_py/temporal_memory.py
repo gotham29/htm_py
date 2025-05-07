@@ -55,6 +55,7 @@ class TemporalMemory:
         self.activeSegments = set()
         self.segmentActiveForCell = {}
         self.winnerCellForColumn = {}
+        self.predictedSegmentForCell = {}
 
         # logger.info("TemporalMemory initialized with %d columns, %d cells total",
         #             self.numColumns, self.numCells)
@@ -149,14 +150,14 @@ class TemporalMemory:
                 winnerCell = getLeastUsedCell(self.connections, cells, self.lastUsedCell)
                 winnerCells.add(winnerCell)
                 self.winnerCellForColumn[col] = winnerCell
-                
+
                 self.lastUsedCell = winnerCell
 
         return activeCells, winnerCells
 
     def _predict_cells(self):
         self.predictiveCells.clear()
-        self.segmentActiveForCell.clear()
+        # self.segmentActiveForCell.clear()
 
         for cell in range(self.numCells):
             segments = self.connections.segmentsForCell(cell)
@@ -172,7 +173,8 @@ class TemporalMemory:
                     srcs = [self.connections.dataForSynapse(s).presynapticCell for s in syns]
                     print(f"[PREDICT] cell {cell} predicted by segment {segment}, active count = {active_count}, sources = {sorted(srcs)}")
                     self.predictiveCells.add(cell)
-                    self.segmentActiveForCell[cell] = segment
+                    # self.segmentActiveForCell[cell] = segment
+                    self.predictedSegmentForCell[cell] = segment
                     break  # stop after first matching segment
 
     def _learn_segments(self, activeColumns: List[int], prevWinnerCells: Set[int]) -> None:
@@ -186,15 +188,28 @@ class TemporalMemory:
                 print(f"[LEARN] Skipping learning for column {col} (no prevWinnerCells)")
                 continue
 
+            matchingSegment = None
+            overlap = -1
+
             if learningCell in self.prevPredictiveCells and learningCell in self.segmentActiveForCell:
                 matchingSegment = self.segmentActiveForCell[learningCell]
-                overlap = self.minThreshold  # Assign default high value to allow reuse
+                overlap = self.minThreshold  # Allow reuse
                 print(f"[LEARN] Reusing existing matching segment {matchingSegment} on cell {learningCell}")
             else:
                 matchingSegment, overlap = getBestMatchingSegment(
                     self.connections, learningCell, prevWinnerCells,
                     self.minThreshold, self.connectedPermanence, return_overlap=True)
                 print(f"[LEARN] Best matching segment: {matchingSegment} (overlap={overlap})")
+
+            # 🚨 Force new segment if context differs
+            if matchingSegment is not None and overlap >= self.minThreshold:
+                existing_sources = {
+                    self.connections.dataForSynapse(s).presynapticCell
+                    for s in self.connections.synapsesForSegment(matchingSegment)
+                }
+                if not existing_sources.issuperset(prevWinnerCells):
+                    print(f"[LEARN] Context mismatch detected — growing new segment instead of reusing")
+                    matchingSegment = None
 
             if matchingSegment is not None and overlap >= self.minThreshold:
                 active_synapses = [
