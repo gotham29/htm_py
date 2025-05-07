@@ -27,6 +27,7 @@ class TestSynapsePruning(unittest.TestCase):
                 winner = cells[0]
                 tm_self.winnerCells.add(winner)
                 tm_self.winnerCellForColumn[col] = winner
+            return tm_self.activeCells, tm_self.winnerCells
 
         self.tm._activate_columns = types.MethodType(_deterministic_activate_columns, self.tm)
 

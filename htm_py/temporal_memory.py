@@ -74,8 +74,11 @@ class TemporalMemory:
         print(f"\n[TM] >>> compute(activeColumns={activeColumns}, learn={learn})")
         self.learn = learn
         self.activeColumns = activeColumns
+
+        print("[DEBUG] _activate_columns is:", self._activate_columns)
+        print("[DEBUG] type:", type(self._activate_columns))
+
         self.activeCells, self.winnerCells = self._activate_columns(activeColumns)
-        # self._activate_columns(activeColumns)
         print(f"[TM] ActiveCells after _activate_columns: {sorted(self.activeCells)}")
         print(f"[TM] WinnerCells after _activate_columns: {sorted(self.winnerCells)}")
 
@@ -321,29 +324,6 @@ def getBestMatchingCell(connections, columnCells, activePresynapticCells, minThr
                 best_cell = cell
 
     return best_cell if best_cell is not None else getLeastUsedCell(connections, columnCells)
-
-# def getBestMatchingSegment(connections, cell: int, activeSynapses: Set[int], minThreshold: int, connectedPermanence: float, return_overlap=False):
-#     if not isinstance(activeSynapses, set):
-#         raise TypeError(f"Expected activeSynapses to be a set, got {type(activeSynapses).__name__}")
-#     if not isinstance(minThreshold, int) or minThreshold < 0:
-#         raise ValueError(f"minThreshold must be a non-negative integer, got {minThreshold}")
-
-#     bestSegment = None
-#     bestOverlap = -1
-
-#     for seg in connections.segmentsForCell(cell):
-#         synapses = connections.synapsesForSegment(seg)
-#         overlap = sum(1 for s in synapses
-#                       if connections.dataForSynapse(s).presynapticCell in activeSynapses and
-#                          connections.dataForSynapse(s).permanence >= connectedPermanence)
-#         if overlap > bestOverlap:
-#             bestSegment = seg
-#             bestOverlap = overlap
-
-#     if return_overlap:
-#         return bestSegment, bestOverlap
-#     else:
-#         return bestSegment
 
 def getBestMatchingSegment(connections, cell: int, activeSynapses: Set[int], minThreshold: int, connectedPermanence: float, return_overlap=False):
     if not isinstance(activeSynapses, set):
