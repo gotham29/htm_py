@@ -233,6 +233,30 @@ class TemporalMemory:
                 print(f"[LEARN] Grown {len(syns)} synapses on segment {newSegment}")
                 self.segmentActiveForCell[learningCell] = newSegment
 
+    # def adaptSegment(self, conn, segment, activeSynapses, positiveReinforcement,
+    #                 permanenceIncrement=0.05, permanenceDecrement=0.05):
+    #     all_synapses = conn.synapsesForSegment(segment)
+    #     active_set = set(activeSynapses)
+
+    #     for synapse in active_set:
+    #         if synapse not in all_synapses:
+    #             raise KeyError(f"Synapse {synapse} is not on segment {segment}")
+
+    #     for synapse in all_synapses:
+    #         data = conn.dataForSynapse(synapse)
+    #         permanence = data.permanence
+
+    #         if synapse in active_set:
+    #             delta = permanenceIncrement if positiveReinforcement else -permanenceDecrement
+    #         else:
+    #             # delta = -permanenceDecrement if positiveReinforcement else 0.0
+    #             if positiveReinforcement:
+    #                 delta = -permanenceDecrement
+    #             else:
+    #                 delta = 0.0
+    #         new_perm = min(max(permanence + delta, 0.0), 1.0)
+    #         conn.updateSynapsePermanence(synapse, new_perm)
+
     def adaptSegment(self, conn, segment, activeSynapses, positiveReinforcement,
                     permanenceIncrement=0.05, permanenceDecrement=0.05):
         all_synapses = conn.synapsesForSegment(segment)
@@ -249,13 +273,39 @@ class TemporalMemory:
             if synapse in active_set:
                 delta = permanenceIncrement if positiveReinforcement else -permanenceDecrement
             else:
-                # delta = -permanenceDecrement if positiveReinforcement else 0.0
-                if positiveReinforcement:
-                    delta = -permanenceDecrement
-                else:
-                    delta = 0.0
-            new_perm = min(max(permanence + delta, 0.0), 1.0)
-            conn.updateSynapsePermanence(synapse, new_perm)
+                delta = -permanenceDecrement if positiveReinforcement else 0.0
+
+            conn.updateSynapsePermanence(synapse, delta)
+
+
+    # def _adapt_segment(
+    #     self,
+    #     connections,
+    #     segment,
+    #     activePresynapticCells,
+    #     newSynapseCount,
+    #     increment,
+    #     decrement
+    # ):
+    #     """
+    #     Adjust permanence of synapses on a segment based on active presynaptic cells.
+    #     """
+    #     synapses = connections.synapsesForSegment(segment)
+    #     for syn in synapses:
+    #         data = connections.dataForSynapse(syn)
+    #         if data.presynapticCell in activePresynapticCells:
+    #             new_perm = min(1.0, data.permanence + increment)
+    #         else:
+    #             new_perm = max(0.0, data.permanence - decrement)
+    #         connections.updateSynapsePermanence(syn, new_perm)
+
+    #     # Optionally grow new synapses
+    #     if newSynapseCount > 0:
+    #         existing = {connections.dataForSynapse(s).presynapticCell for s in synapses}
+    #         potential = list(activePresynapticCells - existing)
+    #         new_cells = potential[:newSynapseCount]
+    #         for cell in new_cells:
+    #             connections.createSynapse(segment, cell, self.initialPermanence)
 
     def _adapt_segment(
         self,
@@ -273,10 +323,10 @@ class TemporalMemory:
         for syn in synapses:
             data = connections.dataForSynapse(syn)
             if data.presynapticCell in activePresynapticCells:
-                new_perm = min(1.0, data.permanence + increment)
+                delta = increment
             else:
-                new_perm = max(0.0, data.permanence - decrement)
-            connections.updateSynapsePermanence(syn, new_perm)
+                delta = -decrement
+            connections.updateSynapsePermanence(syn, delta)
 
         # Optionally grow new synapses
         if newSynapseCount > 0:

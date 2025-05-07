@@ -1,6 +1,7 @@
+# test_tm_synapses.py
+
 import unittest
 from htm_py.temporal_memory import TemporalMemory
-from htm_py.connections import Connections
 
 class TestTMSynapseGrowth(unittest.TestCase):
     def setUp(self):
@@ -88,10 +89,13 @@ class TestTMSegmentAdaptation(unittest.TestCase):
 
         inactive_syn = synapses[-1]
         initial_perm = self.tm.connections.dataForSynapse(inactive_syn).permanence
-        self.tm.connections.updateSynapsePermanence(inactive_syn, initial_perm)
+
+        print(f"Initial inactive syn perm: {initial_perm}")
 
         self.tm.compute([0], learn=True)
         updated_perm = self.tm.connections.dataForSynapse(inactive_syn).permanence
+        print(f"Updated inactive syn perm: {updated_perm}")
+
         self.assertLessEqual(updated_perm, initial_perm)
 
     def test_adapt_segment_does_not_change_structure(self):
@@ -105,3 +109,7 @@ class TestTMSegmentAdaptation(unittest.TestCase):
         self.tm.compute([0], learn=True)
         syn_after = set(self.tm.connections.synapsesForSegment(segment))
         self.assertEqual(syn_before, syn_after)
+
+
+if __name__ == '__main__':
+    unittest.main()
