@@ -120,6 +120,9 @@ class TemporalMemory:
         return list(range(start, start + self.cellsPerColumn))
 
     def _activate_columns(self, activeColumns: List[int]) -> Tuple[Set[int], Set[int]]:
+        if not activeColumns:
+            return set(), set()
+
         winnerCells = set()
         activeCells = set()
 
@@ -129,23 +132,25 @@ class TemporalMemory:
                 if c in self.prevPredictiveCells
             ]
             if predictedCells:
-                bestCell = predictedCells[0]
+                winnerCell = predictedCells[0]
                 bestSeg, overlap = getBestMatchingSegment(
-                    self.connections, bestCell, self.prevActiveCells,
+                    self.connections, winnerCell, self.prevActiveCells,
                     self.activationThreshold, self.connectedPermanence, return_overlap=True
                 )
                 if bestSeg is not None:
-                    print(f"[ACTIVATE] Best segment for cell {bestCell}: {bestSeg} from sources {[self.connections.dataForSynapse(s).presynapticCell for s in self.connections.synapsesForSegment(bestSeg)]} with overlap {overlap}")
-                activeCells.add(bestCell)
-                winnerCells.add(bestCell)
-                self.segmentActiveForCell[bestCell] = bestSeg
-                self.winnerCellForColumn[col] = bestCell
+                    print(f"[ACTIVATE] Best segment for cell {winnerCell}: {bestSeg} from sources {[self.connections.dataForSynapse(s).presynapticCell for s in self.connections.synapsesForSegment(bestSeg)]} with overlap {overlap}")
+                activeCells.add(winnerCell)  #bestCell
+                winnerCells.add(winnerCell)  #bestCell
+                self.segmentActiveForCell[winnerCell] = bestSeg  #[bestCell]
+                self.winnerCellForColumn[col] = winnerCell  #bestCell
             else:
                 cells = self._cells_for_column(col)
                 activeCells.update(cells)
                 winnerCell = getLeastUsedCell(self.connections, cells, self.lastUsedCell)
                 winnerCells.add(winnerCell)
                 self.winnerCellForColumn[col] = winnerCell
+                
+                self.lastUsedCell = winnerCell
 
         return activeCells, winnerCells
 
@@ -302,6 +307,29 @@ def getBestMatchingCell(connections, columnCells, activePresynapticCells, minThr
 
     return best_cell if best_cell is not None else getLeastUsedCell(connections, columnCells)
 
+# def getBestMatchingSegment(connections, cell: int, activeSynapses: Set[int], minThreshold: int, connectedPermanence: float, return_overlap=False):
+#     if not isinstance(activeSynapses, set):
+#         raise TypeError(f"Expected activeSynapses to be a set, got {type(activeSynapses).__name__}")
+#     if not isinstance(minThreshold, int) or minThreshold < 0:
+#         raise ValueError(f"minThreshold must be a non-negative integer, got {minThreshold}")
+
+#     bestSegment = None
+#     bestOverlap = -1
+
+#     for seg in connections.segmentsForCell(cell):
+#         synapses = connections.synapsesForSegment(seg)
+#         overlap = sum(1 for s in synapses
+#                       if connections.dataForSynapse(s).presynapticCell in activeSynapses and
+#                          connections.dataForSynapse(s).permanence >= connectedPermanence)
+#         if overlap > bestOverlap:
+#             bestSegment = seg
+#             bestOverlap = overlap
+
+#     if return_overlap:
+#         return bestSegment, bestOverlap
+#     else:
+#         return bestSegment
+
 def getBestMatchingSegment(connections, cell: int, activeSynapses: Set[int], minThreshold: int, connectedPermanence: float, return_overlap=False):
     if not isinstance(activeSynapses, set):
         raise TypeError(f"Expected activeSynapses to be a set, got {type(activeSynapses).__name__}")
@@ -323,7 +351,7 @@ def getBestMatchingSegment(connections, cell: int, activeSynapses: Set[int], min
     if return_overlap:
         return bestSegment, bestOverlap
     else:
-        return bestSegment
+        return bestSegment if bestOverlap >= minThreshold else None
 
 def getLeastUsedCell(connections, columnCells, lastUsedCell=None):
     """
