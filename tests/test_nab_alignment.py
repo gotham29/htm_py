@@ -23,7 +23,7 @@ class TestNabAlignment(unittest.TestCase):
         values = df["value"].tolist()
 
         df_numenta = pd.read_csv(path_numenta)[:limit]
-        numenta_scores = df_numenta["anomaly_score"].tolist()
+        numenta_scores = df_numenta["raw_score"].tolist()
 
         model = HTMModel(config=config)
         ours_scores = []
