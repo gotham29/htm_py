@@ -307,23 +307,24 @@ class TemporalMemory:
 
         for cell in range(self.numCells):
             for seg in self.connections.segmentsForCell(cell):
-                active_syns = sum(
-                    1 for syn in self.connections.synapsesForSegment(seg)
+                active_syns = 0
+                for syn in self.connections.synapsesForSegment(seg):
+                    data = self.connections.dataForSynapse(syn)
                     if (
-                        self.connections.dataForSynapse(syn)["presynapticCell"] in self.prevActiveCells and
-                        self.connections.dataForSynapse(syn)["permanence"] >= self.connectedPermanence
-                    )
-                )
+                        data["presynapticCell"] in self.prevActiveCells and
+                        data["permanence"] >= self.connectedPermanence
+                    ):
+                        active_syns += 1
 
                 if active_syns >= self.activationThreshold:
                     self.predictiveCells.add(cell)
                     self.lastUsedIterationForSegment[seg] = self.iteration
-                elif active_syns > 0 and self.predictedSegmentDecrement > 0.0:
-                    # 🔒 WDND: Decay predicted segments that were partially active but didn't meet threshold
+                elif self.predictedSegmentDecrement > 0.0:
+                    # 🔒 Penalize segments that tried to predict but failed
                     for syn in self.connections.synapsesForSegment(seg):
                         perm = self.connections.dataForSynapse(syn)["permanence"]
-                        decayed = max(perm - self.predictedSegmentDecrement, 0.0)
-                        self.connections.updateSynapsePermanence(syn, decayed)
+                        new_perm = max(0.0, perm - self.predictedSegmentDecrement)
+                        self.connections.updateSynapsePermanence(syn, new_perm)
 
     def _decrement_predicted_segments(self):
         """

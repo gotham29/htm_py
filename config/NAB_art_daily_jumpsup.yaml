@@ -32,7 +32,7 @@ tm:
   maxNewSynapseCount: 31  #20
   permanenceIncrement: 0.04  #0.1
   permanenceDecrement: 0.008  #0.1
-  predictedSegmentDecrement: 0.001  #0.0
+  predictedSegmentDecrement: 0.01  #0.0
   maxSegmentsPerCell: 128  #255
   maxSynapsesPerSegment: 128
   seed: 1960  #42
