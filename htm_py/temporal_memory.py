@@ -159,6 +159,7 @@ class TemporalMemory:
                         self.lastUsedIterationForSegment[seg] = self.iteration
 
         self.iteration += 1
+        self._decrement_predicted_segments()
 
     def _update_state(self):
         self.prevActiveCells = set(self.activeCells)
@@ -292,6 +293,42 @@ class TemporalMemory:
                 if active_syns >= self.activationThreshold:
                     self.predictiveCells.add(cell)
                     self.lastUsedIterationForSegment[seg] = self.iteration
+
+    def _decrement_predicted_segments(self):
+        """
+        Apply predictedSegmentDecrement to all previously predictive segments
+        that did not become active. This matches Numenta's Phase 2 decay logic.
+        """
+        for cell in range(self.numCells):
+            for seg in self.connections.segmentsForCell(cell):
+                if self._was_predicted_last_step(seg) and not self._is_segment_active(seg):
+                    for syn in self.connections.synapsesForSegment(seg):
+                        data = self.connections.dataForSynapse(syn)
+                        new_perm = max(data["permanence"] - self.predictedSegmentDecrement, 0.0)
+                        self.connections.updateSynapsePermanence(syn, new_perm)
+
+    def _was_predicted_last_step(self, segment):
+        """
+        Check if a segment was predicted last step: enough synapses connected to prevActiveCells.
+        """
+        syn_count = sum(
+            1 for syn in self.connections.synapsesForSegment(segment)
+            if (
+                self.connections.dataForSynapse(syn)["presynapticCell"] in self.prevActiveCells and
+                self.connections.dataForSynapse(syn)["permanence"] >= self.connectedPermanence
+            )
+        )
+        return syn_count >= self.activationThreshold
+
+    def _is_segment_active(self, segment):
+        """
+        Check if segment is active now (connected synapses from current prevActiveCells).
+        """
+        return any(
+            self.connections.dataForSynapse(syn)["presynapticCell"] in self.activeCells and
+            self.connections.dataForSynapse(syn)["permanence"] >= self.connectedPermanence
+            for syn in self.connections.synapsesForSegment(segment)
+        )
 
     def getAnomalyScore(self):
         return self._calculate_anomaly_score()
