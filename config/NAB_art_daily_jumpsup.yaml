@@ -2,7 +2,7 @@ encoder:
   rdse_features:
     - name: value
       min_val: 0
-      max_val: 95.92  #114.4
+      max_val: 130
       n: 130
       w: 21
 
@@ -31,7 +31,7 @@ tm:
   minThreshold: 13  #10
   maxNewSynapseCount: 31  #20
   permanenceIncrement: 0.04  #0.1
-  permanenceDecrement: 0.015  #0.1, 0.008
+  permanenceDecrement: 0.008  #0.1
   predictedSegmentDecrement: 0.001  #0.0
   maxSegmentsPerCell: 128  #255
   maxSynapsesPerSegment: 128

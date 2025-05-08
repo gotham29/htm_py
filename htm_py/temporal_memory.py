@@ -90,6 +90,8 @@ class TemporalMemory:
             self._learn_segments()
 
         self._predict_next()
+        if learn:
+            self._punish_incorrect_predictions()
         self._update_state()
         anomaly_score = self._calculate_anomaly_score()
         prediction_count = self._calculate_prediction_count()
@@ -160,6 +162,28 @@ class TemporalMemory:
 
         self.iteration += 1
         self._decrement_predicted_segments()
+
+    def _punish_incorrect_predictions(self):
+        """
+        Decrease permanence on all segments that were predicting,
+        but whose cells did not become active (false positives).
+        """
+        for cell in range(self.numCells):
+            if cell not in self.activeCells and cell in self.predictiveCells:
+                for seg in self.connections.segmentsForCell(cell):
+                    # Only segments that contributed to a false positive
+                    active_syns = [
+                        syn for syn in self.connections.synapsesForSegment(seg)
+                        if (
+                            self.connections.dataForSynapse(syn)["presynapticCell"] in self.prevActiveCells and
+                            self.connections.dataForSynapse(syn)["permanence"] >= self.connectedPermanence
+                        )
+                    ]
+                    if len(active_syns) >= self.activationThreshold:
+                        for syn in active_syns:
+                            perm = self.connections.dataForSynapse(syn)["permanence"]
+                            new_perm = max(0.0, perm - self.predictedSegmentDecrement)
+                            self.connections.updateSynapsePermanence(syn, new_perm)
 
     def _update_state(self):
         self.prevActiveCells = set(self.activeCells)
@@ -287,12 +311,19 @@ class TemporalMemory:
                     1 for syn in self.connections.synapsesForSegment(seg)
                     if (
                         self.connections.dataForSynapse(syn)["presynapticCell"] in self.prevActiveCells and
-                        self.connections.dataForSynapse(syn)["permanence"] >= self.connectedPermanence  # 🔒 Only connected
+                        self.connections.dataForSynapse(syn)["permanence"] >= self.connectedPermanence
                     )
                 )
+
                 if active_syns >= self.activationThreshold:
                     self.predictiveCells.add(cell)
                     self.lastUsedIterationForSegment[seg] = self.iteration
+                elif active_syns > 0 and self.predictedSegmentDecrement > 0.0:
+                    # 🔒 WDND: Decay predicted segments that were partially active but didn't meet threshold
+                    for syn in self.connections.synapsesForSegment(seg):
+                        perm = self.connections.dataForSynapse(syn)["permanence"]
+                        decayed = max(perm - self.predictedSegmentDecrement, 0.0)
+                        self.connections.updateSynapsePermanence(syn, decayed)
 
     def _decrement_predicted_segments(self):
         """
