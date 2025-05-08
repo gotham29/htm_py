@@ -79,17 +79,15 @@ class TemporalMemory:
         return self.predictiveCells
 
     def compute(self, activeColumns, learn=True):
+        self.activeColumns = set(activeColumns)  # ✅ Capture early for fidelity
         if self.iteration == 0:
             self.prevActiveCells.clear()
             self.prevWinnerCells.clear()
 
-        self.activeColumns = set(activeColumns)
         self._activate_columns(activeColumns, learn)
 
         if learn:
             self._learn_segments()
-            total_segments = sum(len(self.connections.segmentsForCell(c)) for c in range(self.numCells))
-            # logger.debug(f"[t={self.iteration}] SEGMENTS: total={total_segments}")
 
         self._predict_next()
         self._update_state()
@@ -97,6 +95,25 @@ class TemporalMemory:
         prediction_count = self._calculate_prediction_count()
 
         return anomaly_score, prediction_count
+
+    def _activate_columns(self, activeColumns, learn):
+        self.activeCells.clear()
+        self.winnerCells.clear()
+
+        for col in activeColumns:
+            matching = self._get_matching_segments(col)
+
+            if matching:
+                best = self._best_matching_segment(matching)
+                winner_cell = self.connections.cellForSegment(best)
+            else:
+                winner_cell = self._get_least_used_cell(col)
+
+                if learn:
+                    self._grow_new_segment(winner_cell)
+
+            self._mark_column_active(col)
+            self.winnerCells.add(winner_cell)
 
     def _calculate_anomaly_score(self):
         if not self.activeCells:
@@ -119,33 +136,8 @@ class TemporalMemory:
             return 0.0
         return self._calculate_prediction_count() / active_columns
 
-    def _activate_columns(self, activeColumns, learn):
-        self.activeCells.clear()
-        self.winnerCells.clear()
-
-        for col in activeColumns:
-            matching = self._get_matching_segments(col)
-
-            if matching:
-                best = self._best_matching_segment(matching)
-                winner_cell = self.connections.cellForSegment(best)
-                if learn:
-                    self._adapt_segment(best, self.prevWinnerCells)
-                    self._grow_segment_if_needed(best)
-            else:
-                winner_cell = self._get_least_used_cell(col)
-
-                if learn and self.prevWinnerCells:
-                    self._grow_new_segment(winner_cell)
-
-            self._mark_column_active(col)
-            self.winnerCells.add(winner_cell)
-
     def _learn_segments(self):
-        if not hasattr(self, "activeColumns"):
-            self.activeColumns = {col // self.cellsPerColumn for col in self.activeCells}
-
-        for col in self.activeColumns:
+        for col in self.activeColumns:  # ✅ Use captured set
             for cell in self._cells_for_column(col):
                 segments = self.connections.segmentsForCell(cell)
                 matching_segments = [
@@ -161,10 +153,10 @@ class TemporalMemory:
                     self.lastUsedIterationForSegment[best_seg] = self.iteration
                 else:
                     if not self.prevWinnerCells:
-                        continue  # 🔒 no learning context, skip
-                    seg = self.connections.createSegment(cell)
-                    self._adapt_segment(seg, self.prevWinnerCells)
-                    self.lastUsedIterationForSegment[seg] = self.iteration
+                        continue
+                    seg = self._grow_new_segment(cell)
+                    if seg is not None:
+                        self.lastUsedIterationForSegment[seg] = self.iteration
 
         self.iteration += 1
 
@@ -190,26 +182,6 @@ class TemporalMemory:
 
     def _mark_column_active(self, col):
         self.activeCells.update(self._cells_for_column(col))
-
-    def _activate_columns(self, activeColumns, learn):
-        self.activeCells.clear()
-        self.winnerCells.clear()
-
-        for col in activeColumns:
-            matching = self._get_matching_segments(col)
-            if matching:
-                best = self._best_matching_segment(matching)
-                winner_cell = self.connections.cellForSegment(best)
-                if learn:
-                    self._adapt_segment(best, self.prevWinnerCells)
-                    self._grow_segment_if_needed(best)
-            else:
-                winner_cell = self._get_least_used_cell(col)
-                if learn and self.prevWinnerCells:
-                    self._grow_new_segment(winner_cell)
-
-            self._mark_column_active(col)
-            self.winnerCells.add(winner_cell)
 
     def _get_matching_segments(self, col):
         matching = []
@@ -247,29 +219,47 @@ class TemporalMemory:
             self.connections.destroySegment(segment)
 
     def _grow_segment_if_needed(self, segment):
-        existing = {
+        existing_synapses = self.connections.synapsesForSegment(segment)
+        existing_cells = {
             self.connections.dataForSynapse(syn)["presynapticCell"]
-            for syn in self.connections.synapsesForSegment(segment)
+            for syn in existing_synapses
         }
-        new_cells = sorted(set(self.prevWinnerCells) - existing)
-        to_add = new_cells[:self.maxNewSynapseCount - len(existing)]
+
+        available_cells = sorted(set(self.prevWinnerCells) - existing_cells)
+        remaining_capacity = self.maxSynapsesPerSegment - len(existing_synapses)
+
+        to_add = available_cells[:min(self.maxNewSynapseCount, remaining_capacity)]
+
         for cell in to_add:
             self.connections.createSynapse(segment, cell, self.initialPermanence)
 
     def _grow_new_segment(self, cell):
+        if not self.prevWinnerCells:
+            logger.debug(f"[t={self.iteration}] Skipping segment creation: no prevWinnerCells")
+            return None
+
+        if self.iteration <= 2:
+            logger.debug(f"[t={self.iteration}] DEFERRING segment creation to allow burn-in")
+            return None
+
+        # ✅ WDND: context must be winner AND active cells
+        context = self.prevWinnerCells & self.prevActiveCells
+        if not context:
+            logger.debug(f"[t={self.iteration}] Skipping segment: no active winner context")
+            return None
+
         segments = self.connections.segmentsForCell(cell)
         if len(segments) >= self.maxSegmentsPerCell:
             oldest = min(segments, key=lambda seg: self.lastUsedIterationForSegment.get(seg, 0))
             self.connections.destroySegment(oldest)
 
-        if not self.prevWinnerCells:
-            logger.debug(f"[t={self.iteration}] Skipping synapse growth: no prevWinnerCells")
-            return self.connections.createSegment(cell)
-
         seg = self.connections.createSegment(cell)
         self.lastUsedIterationForSegment[seg] = self.iteration
-        for src in sorted(self.prevWinnerCells)[:self.maxNewSynapseCount]:
-            self.connections.createSynapse(seg, src, self.initialPermanence)
+
+        initial_perm = min(self.initialPermanence, self.connectedPermanence - 0.01)
+        for src in sorted(context)[:self.maxNewSynapseCount]:
+            logger.debug(f"[t={self.iteration}] Synapse: {src} → {seg}, perm={initial_perm:.3f}")
+            self.connections.createSynapse(seg, src, initial_perm)
         return seg
 
     def _get_least_used_cell(self, col):
@@ -294,7 +284,10 @@ class TemporalMemory:
             for seg in self.connections.segmentsForCell(cell):
                 active_syns = sum(
                     1 for syn in self.connections.synapsesForSegment(seg)
-                    if self.connections.dataForSynapse(syn)["presynapticCell"] in self.prevActiveCells
+                    if (
+                        self.connections.dataForSynapse(syn)["presynapticCell"] in self.prevActiveCells and
+                        self.connections.dataForSynapse(syn)["permanence"] >= self.connectedPermanence  # 🔒 Only connected
+                    )
                 )
                 if active_syns >= self.activationThreshold:
                     self.predictiveCells.add(cell)
