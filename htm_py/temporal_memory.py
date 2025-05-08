@@ -82,7 +82,30 @@ class TemporalMemory:
             self._learn_segments()
         self._predict_next()
         self._update_state()
-        # return anomaly_score, prediction_count
+        anomaly_score = self._calculate_anomaly_score()
+        prediction_count = self._calculate_prediction_count()
+        return anomaly_score, prediction_count
+
+    def _calculate_anomaly_score(self):
+        if not self.activeCells:
+            return 0.0
+        matched = len(self.activeCells & self.predictiveCells)
+        return 1.0 - (matched / len(self.activeCells))
+
+    def _calculate_prediction_count(self):
+        return len(self.activeCells & self.predictiveCells)
+
+    def getNormalizedPredictionCount(self):
+        """
+        Returns: prediction count / (activeCells / cellsPerColumn),
+        representing how many full columns were successfully predicted.
+        """
+        if not self.activeCells:
+            return 0.0
+        active_columns = len(self.activeCells) / self.cellsPerColumn
+        if active_columns == 0:
+            return 0.0
+        return self._calculate_prediction_count() / active_columns
 
     def _activate_columns(self, activeColumns, learn):
         self.activeCells.clear()
@@ -254,3 +277,8 @@ class TemporalMemory:
                     self.predictiveCells.add(cell)
                     self.lastUsedIterationForSegment[seg] = self.iteration
 
+    def getAnomalyScore(self):
+        return self._calculate_anomaly_score()
+
+    def getPredictionCount(self):
+        return self._calculate_prediction_count()
