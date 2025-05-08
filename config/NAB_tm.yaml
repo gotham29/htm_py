@@ -1,0 +1,39 @@
+encoder:
+  rdse_features:
+    - name: value
+      min_val: 0
+      max_val: 114.4
+      n: 130
+      w: 21
+
+  timeOfDay:
+    n: 21
+    rotation: 9.49  # One full rotation per day
+
+use_sp: false
+
+sp:
+  inputDimensions: [151]
+  columnDimensions: [2048]
+  potentialPct: 0.8  #0.85
+  globalInhibition: true
+  synPermActiveInc: 0.003  #0.04
+  synPermInactiveDec: 0.0005  #0.005
+  boostStrength: 0.0
+  seed: 1956  #42
+#   "synPermConnected": 0.2,
+
+tm:
+  columnDimensions: [2048]
+  cellsPerColumn: 32
+  activationThreshold: 20  #13
+  initialPermanence: 0.24  #0.21
+  connectedPermanence: 0.2  #0.5
+  minThreshold: 13  #10
+  maxNewSynapseCount: 31  #20
+  permanenceIncrement: 0.04  #0.1
+  permanenceDecrement: 0.008  #0.1
+  predictedSegmentDecrement: 0.001  #0.0
+  maxSegmentsPerCell: 128  #255
+  maxSynapsesPerSegment: 128
+  seed: 1960  #42

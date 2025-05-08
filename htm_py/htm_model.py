@@ -1,101 +1,61 @@
+import numpy as np
 from htm_py.temporal_memory import TemporalMemory
+from htm_py.spatial_pooler import SpatialPooler
 from htm_py.encoders.rdse import RDSE
-from htm_py.spatial_pooler import SpatialPooler  # if you use SP
+from htm_py.encoders.date import DateEncoder
+from htm_py.encoders.multi import MultiEncoder
+import logging
+
+logger = logging.getLogger("HTMModel")
+
 
 class HTMModel:
     def __init__(self, config):
         self.config = config
-        self.rdse = RDSE(**config["rdse"])
-        self.sp = SpatialPooler(**config["sp"])
+        self.use_sp = config.get("use_sp", True)
+
+        self.encoder = self._build_encoder(config["encoder"])
+        if self.use_sp:
+            self.sp = SpatialPooler(**config["sp"])
         self.tm = TemporalMemory(**config["tm"])
 
+    def _build_encoder(self, encoder_config):
+        encoders = {}
+        rdse_features = encoder_config.get("rdse_features", [])
+        assert len(rdse_features) > 0, "At least one RDSE feature must be defined"
+
+        for feat in rdse_features:
+            # WDND: build RDSE using fixed resolution of 0.88
+            encoders[feat["name"]] = RDSE(
+                min_val=feat["min_val"],
+                max_val=feat["max_val"],
+                n=feat["n"],
+                w=feat["w"]
+            )
+
+        if "timeOfDay" in encoder_config:
+            tod = encoder_config["timeOfDay"]
+            encoders["timestamp"] = DateEncoder(timeOfDay=(tod["n"], tod["rotation"]))
+
+        return MultiEncoder(encoders)
+
     def compute(self, input_value, learn=True):
-        encoded = self.rdse.encode(input_value)
-        active_columns = self.sp.compute(encoded, learn=learn)
+        encoded = self.encoder.encode(input_value)
+
+        if self.use_sp:
+            active_columns = self.sp.compute(encoded, learn=learn)
+        else:
+            active_columns = np.nonzero(encoded)[0]  # 🛠 FIXED: Nonzero indices
+
         anomaly_score, prediction_count = self.tm.compute(active_columns, learn=learn)
 
         return {
             "anomaly_score": anomaly_score,
             "prediction_count": prediction_count,
             "normalized_prediction_count": self.tm.getNormalizedPredictionCount(),
+            "predictive_cells": list(self.tm.predictiveCells),
+            "active_cells": list(self.tm.activeCells),
         }
 
-
-
-# import os
-# import logging
-
-# log_path = os.getenv("HTM_TRACE_LOG", "htm_trace.log")
-
-# # 🧼 Clear handlers to prevent duplicate logs on re-run
-# for handler in logging.root.handlers[:]:
-#     logging.root.removeHandler(handler)
-
-# logging.basicConfig(
-#     level=logging.DEBUG,
-#     format="%(asctime)s [%(levelname)s] %(message)s",
-#     handlers=[
-#         logging.FileHandler(log_path),
-#         logging.StreamHandler()
-#     ]
-# )
-
-# logger = logging.getLogger(__name__)
-# logger.debug("Logger initialized. Writing to %s", log_path)
-
-# import numpy as np
-# from htm_py.spatial_pooler import SpatialPooler
-# from htm_py.temporal_memory import TemporalMemory
-
-
-# class HTMModel:
-#     def __init__(self, encoder, use_sp=True):
-#         self.encoder = encoder
-#         self.use_sp = use_sp
-
-#         self.sp = SpatialPooler(
-#             inputDimensions=(self.encoder.getWidth(),),
-#             columnDimensions=(2048,),
-#             potentialPct=0.8,
-#             numActiveColumnsPerInhArea=40,
-#             synPermActiveInc=0.003,
-#             synPermInactiveDec=0.0005,
-#             synPermConnected=0.2,
-#             globalInhibition=True,
-#             seed=1956,
-#             boostStrength=0.0,
-#         )
-
-#         self.tm = TemporalMemory(
-#             columnDimensions=(2048,),
-#             cellsPerColumn=32,
-#             activationThreshold=20,
-#             minThreshold=13,
-#             initialPermanence=0.24,
-#             connectedPermanence=0.2,
-#             permanenceIncrement=0.04,
-#             permanenceDecrement=0.008,
-#             predictedSegmentDecrement=0.001,
-#             seed=1960,
-#         )
-
-#     def run(self, input_data, learn=True):
-#         encoded = self.encoder.encode(input_data)
-
-#         if self.use_sp:
-#             active_columns = np.zeros(2048, dtype=np.int32)
-#             self.sp.compute(encoded, learn=learn, activeArray=active_columns)
-#             active_cols = np.flatnonzero(active_columns)
-#         else:
-#             # Directly interpret encoder bits as column activity (1 bit = 1 column)
-#             active_cols = np.flatnonzero(encoded)
-
-#         self.tm.compute(active_cols.tolist(), learn=learn)
-
-#         anomaly_score = self.tm.calculate_anomaly_score()
-#         prediction_count = self.tm.calculate_prediction_count()
-
-#         return anomaly_score, prediction_count
-
-#     def reset(self):
-#         self.tm.reset()
+    def reset(self):
+        self.tm.reset()

@@ -26,7 +26,7 @@ class TestPhase2Learning(unittest.TestCase):
         seg = tm.connections.createSegment(0)
         tm.connections.createSynapse(seg, 0, 0.3)  # one match
 
-        tm._adapt_segment(seg)
+        tm._adapt_segment(seg, tm.prevWinnerCells)
         tm._grow_segment_if_needed(seg)
 
         syn_cells = {tm.connections.dataForSynapse(s)["presynapticCell"]
@@ -72,7 +72,7 @@ class TestPhase2Learning(unittest.TestCase):
         syn0 = tm.connections.createSynapse(seg, 0, 0.3)  # active
         syn1 = tm.connections.createSynapse(seg, 1, 0.3)  # inactive
 
-        tm._adapt_segment(seg)
+        tm._adapt_segment(seg, tm.prevWinnerCells)
         data0 = tm.connections.dataForSynapse(syn0)
         data1 = tm.connections.dataForSynapse(syn1)
 
@@ -108,7 +108,7 @@ class TestPhase2Learning(unittest.TestCase):
         seg = tm.connections.createSegment(0)
         tm.connections.createSynapse(seg, 1, 0.3)  # not in prevWinnerCells
 
-        tm._adapt_segment(seg)
+        tm._adapt_segment(seg, tm.prevWinnerCells)
         syns = tm.connections.synapsesForSegment(seg)
         self.assertEqual(len(syns), 0, "Synapse with low permanence should be removed")
 
@@ -130,7 +130,7 @@ class TestPhase2Learning(unittest.TestCase):
 
         seg = tm.connections.createSegment(0)
         tm.connections.createSynapse(seg, 0, 0.3)
-        tm._adapt_segment(seg)
+        tm._adapt_segment(seg, tm.prevWinnerCells)
 
         # Permanence should remain unchanged
         p = tm.connections.dataForSynapse(
@@ -142,7 +142,7 @@ class TestPhase2Learning(unittest.TestCase):
         tm.iteration = 42
         seg = tm.connections.createSegment(0)
         tm.prevWinnerCells = {0}
-        tm._adapt_segment(seg)
+        tm._adapt_segment(seg, tm.prevWinnerCells)
         tm.lastUsedIterationForSegment[seg] = tm.iteration  # simulate update
 
         self.assertEqual(tm.lastUsedIterationForSegment[seg], 42,
@@ -155,7 +155,7 @@ class TestPhase2Learning(unittest.TestCase):
 
         seg = tm.connections.createSegment(0)
         tm.connections.createSynapse(seg, 0, 0.2)
-        tm._adapt_segment(seg)
+        tm._adapt_segment(seg, tm.prevWinnerCells)
 
         segments = tm.connections.segmentsForCell(0)
         self.assertEqual(len(segments), 0, "Segment should be destroyed if no synapses remain")
@@ -171,7 +171,7 @@ class TestPhase2Learning(unittest.TestCase):
 
         tm.permanenceIncrement = 0.2
         tm.permanenceDecrement = 0.2
-        tm._adapt_segment(seg)
+        tm._adapt_segment(seg, tm.prevWinnerCells)
 
         for syn in tm.connections.synapsesForSegment(seg):
             p = tm.connections.dataForSynapse(syn)["permanence"]

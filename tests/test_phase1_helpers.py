@@ -42,7 +42,7 @@ class TestPhase1Helpers(unittest.TestCase):
         syn = tm.connections.createSynapse(seg, 0, 0.2)
         tm.connections.createSynapse(seg, 1, 0.5)
 
-        tm._adapt_segment(seg)
+        tm._adapt_segment(seg, tm.prevWinnerCells)
         data0 = tm.connections.dataForSynapse(syn)
         self.assertGreaterEqual(data0["permanence"], 0.25)
 

@@ -1,41 +1,28 @@
 import numpy as np
 
 class MultiEncoder:
-    def __init__(self, field_encoders):
+    def __init__(self, encoders):
         """
-        field_encoders: dict of {field_name: encoder_instance}
+        encoders: dict of {feature_name: encoder_object}
         """
-        self.field_encoders = field_encoders
-        self._field_slices = {}
-        self._total_width = 0
+        self.encoders = encoders
+        self.output_width = sum(enc.output_width for enc in encoders.values())
 
-        start = 0
-        for name, encoder in self.field_encoders.items():
-            if encoder is None:
-                raise ValueError(f"Encoder for '{name}' is None. Please instantiate all encoders before passing.")
-
-            if hasattr(encoder, "getWidth"):
-                width = encoder.getWidth()
-            elif hasattr(encoder, "get_width"):
-                width = encoder.get_width()
-            else:
-                raise ValueError(f"Encoder for '{name}' missing getWidth() method")
-
-            self._field_slices[name] = slice(start, start + width)
-            self._total_width += width
-            start += width
-
-    def getWidth(self):
-        return self._total_width
-
-    def encode(self, values: dict):
+    def encode(self, input_dict):
         """
-        values: dict of {field_name: input_value}
+        input_dict: {feature_name: value, ...}
+        Returns a flat SDR vector (numpy array) with all encoded bits.
         """
-        encoded_fields = []
-        for name, encoder in self.field_encoders.items():
-            if name not in values:
-                raise ValueError(f"Missing value for encoder field '{name}'")
-            encoded = encoder.encode(values[name])
-            encoded_fields.append(encoded)
-        return np.concatenate(encoded_fields)
+        assert isinstance(input_dict, dict), "Input must be a dict of feature: value"
+        vectors = []
+
+        for key, encoder in self.encoders.items():
+            val = input_dict.get(key)
+            assert val is not None, f"Missing input value for '{key}'"
+            vec = encoder.encode(val)
+            vectors.append(vec)
+
+        return np.concatenate(vectors)
+
+    def getEncodedFeatures(self):
+        return list(self.encoders.keys())
