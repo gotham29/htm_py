@@ -4,7 +4,7 @@ from datetime import datetime
 from htm_py.htm_model import HTMModel
 import matplotlib.pyplot as plt
 
-limit = 200
+limit = 1000
 dataset = "art_daily_jumpsup"
 
 # === Load reference scores ===

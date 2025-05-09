@@ -53,9 +53,14 @@ class SpatialPooler:
             connected = perms >= self.synPermConnected
             overlaps[i] = np.sum(inputVector[pool][connected])
 
-        # Inhibition: pick top-N% or top-k (simplified global inhibition)
-        kth = np.percentile(overlaps, 98)
-        active_columns = np.where(overlaps >= kth)[0]
+        # FIX: Use fixed-k inhibition instead of top-N%
+        k = 40  # Numenta typically uses 40
+        if k >= self.numColumns:
+            active_columns = np.arange(self.numColumns)
+        else:
+            top_k_indices = np.argpartition(overlaps, -k)[-k:]
+            # Optionally sort them to have the strongest overlaps first
+            active_columns = top_k_indices[np.argsort(-overlaps[top_k_indices])]
 
         if learn:
             self._adapt_permanences(inputVector, active_columns)

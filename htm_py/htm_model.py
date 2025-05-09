@@ -4,6 +4,7 @@ from htm_py.temporal_memory import TemporalMemory
 from htm_py.encoders.rdse import RDSE
 from htm_py.encoders.date import DateEncoder
 
+
 class HTMModel:
     def __init__(self, config, encoder=None):
         enc_cfg = config["encoder"]
@@ -25,21 +26,27 @@ class HTMModel:
             self.encoder = MultiEncoder(encoders)
 
         self.use_sp = config.get("use_sp", False)
-        if self.use_sp:
-            self.sp = SpatialPooler(**config["sp"])
-        else:
-            self.sp = None
-
+        self.sp = SpatialPooler(**config["sp"]) if self.use_sp else None
         self.tm = TemporalMemory(**config["tm"])
 
     def compute(self, input_data, learn=True):
+        """
+        Compute the anomaly score and prediction ambiguity for a single timestep.
+
+        Args:
+            input_data (dict): Raw input features to encode.
+            learn (bool): Whether the model should learn at this step.
+
+        Returns:
+            (float, float): (Anomaly Score, Prediction Count)
+        """
         encoded = self.encoder.encode(input_data)
 
-        if self.use_sp:
-            active_columns = self.sp.compute(encoded, learn=learn)
-        else:
-            # treat each active bit index as a column
-            active_columns = [i for i, bit in enumerate(encoded) if bit == 1]
+        active_columns = (
+            self.sp.compute(encoded, learn=learn) if self.use_sp
+            else [i for i, bit in enumerate(encoded) if bit == 1]
+        )
 
-        anomaly_score, pred_count = self.tm.compute(active_columns, learn=learn)
-        return anomaly_score, pred_count
+        anomaly_score, prediction_count = self.tm.compute(active_columns, learn=learn)
+
+        return anomaly_score, prediction_count

@@ -10,7 +10,7 @@ encoder:
     n: 21
     rotation: 9.49  # One full rotation per day
 
-use_sp: true  #false
+use_sp: true 
 
 sp:
   inputDimensions: [151]
@@ -23,16 +23,16 @@ sp:
 #   "synPermConnected": 0.2,
 
 tm:
-  columnDimensions: [2048]
-  cellsPerColumn: 32
-  activationThreshold: 20  #13
-  initialPermanence: 0.24  #0.21
-  connectedPermanence: 0.5  #0.2
-  minThreshold: 13  #10
-  maxNewSynapseCount: 31  #20
-  permanenceIncrement: 0.04  #0.1
-  permanenceDecrement: 0.008  #0.1
-  predictedSegmentDecrement: 0.01  #0.0
-  maxSegmentsPerCell: 128  #255
-  maxSynapsesPerSegment: 128
+  column_dimensions: [2048]
+  cells_per_column: 32
+  activation_threshold: 20  #13
+  initial_permanence: 0.2  #0.21
+  connected_permanence: 0.5  #0.2
+  min_threshold: 13  #10
+  max_new_synapse_count: 31  #20
+  permanence_increment: 0.04  #0.1
+  permanence_decrement: 0.008  #0.1
+  predicted_segment_decrement: 0.01  #0.0
+  max_segments_per_cell: 128  #255
+  max_synapses_per_segment: 128
   seed: 1960  #42
