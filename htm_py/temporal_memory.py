@@ -120,13 +120,16 @@ class TemporalMemory:
                 self.matching_segments.add(segment)
 
         if learn:
+            print(f"Iteration {self.iteration}: matching_segments = {self.matching_segments}")
+            print(f"Iteration {self.iteration}: active_segments = {self.active_segments}")
             for segment in self.matching_segments:
                 if segment not in self.active_segments:
                     self.connections.adapt_segment(
                         segment,
                         prev_active_cells=self.active_cells,
                         permanence_increment=0.0,
-                        permanence_decrement=self.predicted_segment_decrement
+                        permanence_decrement=self.predicted_segment_decrement,
+                        iteration=self.iteration
                     )
                     with open("results/tm_phase_trace.csv", "a") as f:
                         f.write(f"{self.iteration},Phase1,PredictedSegmentDecrementApplied,,{segment},failed_prediction\n")
@@ -159,7 +162,7 @@ class TemporalMemory:
                             if segment in self.active_segments:
                                 self.connections.adapt_segment(
                                     segment, prev_active_cells,
-                                    self.permanence_increment, self.permanence_decrement
+                                    self.permanence_increment, self.permanence_decrement, self.iteration
                                 )
                                 with open(tm_trace_path, "a") as f:
                                     f.write(f"{self.iteration},Phase2,AdaptSegment,{cell},{segment},predicted\n")
@@ -186,7 +189,7 @@ class TemporalMemory:
                         )
                         self.connections.adapt_segment(
                             best_segment, prev_active_cells,
-                            self.permanence_increment, self.permanence_decrement
+                            self.permanence_increment, self.permanence_decrement, self.iteration
                         )
                         with open(tm_trace_path, "a") as f:
                             f.write(f"{self.iteration},Phase2,AdaptSegment,{winner_cell},{best_segment},burst_matched\n")
