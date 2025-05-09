@@ -1,5 +1,12 @@
 import numpy as np
 from htm_py.connections import Connections
+import os
+
+tm_trace_path = "results/tm_phase_trace.csv"
+if not os.path.exists(tm_trace_path):
+    with open(tm_trace_path, "w") as f:
+        f.write("timestep,phase,event,cell,segment,info\n")
+
 
 class TemporalMemory:
     def __init__(self, column_dimensions, cells_per_column, activation_threshold,
@@ -39,33 +46,40 @@ class TemporalMemory:
 
 
     def compute(self, active_columns, learn=True):
-        """
-        Advances the Temporal Memory state by one timestep and computes outputs.
-
-        Args:
-            active_columns (list of int): Indices of currently active columns.
-            learn (bool): If True, learning is enabled.
-
-        Returns:
-            (float, float): (Anomaly Score, Prediction Count)
-        """
-        # Phase 1: Predictive State
         self.activate_dendrites(learn)
-
-        # Phase 2: Active and Winner Cells
         self.activate_cells(active_columns, learn)
 
-        # Phase 3: Advance time
-        self.iteration += 1
-
-        # Compute Anomaly Score
+        # Compute Anomaly Score before advancing time
         anomaly = self.anomaly_score(active_columns)
 
-        # Compute Prediction Count (Ambiguity Metric)
         num_active_columns = len(active_columns)
         num_predictive_cells = len(self.get_predictive_cells())
 
+        # === Phase 3: Prediction Accuracy Logging BEFORE advancing iteration ===
+        predicted_cells = self.get_predictive_cells()
+        predicted_columns = set(
+            self.connections.column_for_cell(cell, self.cells_per_column) 
+            for cell in predicted_cells
+        )
+
+        active_columns_set = set(active_columns)
+        correct_predictions = predicted_columns.intersection(active_columns_set)
+        wrong_predictions = predicted_columns - active_columns_set
+
+        log_path = "results/tm_phase3_prediction_accuracy_detailed.csv"
+        if not os.path.exists(log_path):
+            with open(log_path, "w") as f:
+                f.write("timestep,predicted_column,is_correct\n")
+
+        with open(log_path, "a") as f:
+            for col in predicted_columns:
+                is_correct = int(col in correct_predictions)
+                f.write(f"{self.iteration},{col},{is_correct}\n")
+
         prediction_count = (num_predictive_cells / num_active_columns) if num_active_columns > 0 else 0.0
+
+        # Phase 3: Advance time AFTER logging
+        self.iteration += 1
 
         return anomaly, prediction_count
 
@@ -77,6 +91,15 @@ class TemporalMemory:
         Args:
             learn (bool): If True, learning updates will be applied.
         """
+
+        with open(tm_trace_path, "a") as f:
+            for segment in self.active_segments:
+                cell = self.connections.cell_for_segment(segment)
+                f.write(f"{self.iteration},Phase1,SegmentActive,{cell},{segment},active_connected_synapses\n")
+            for segment in self.matching_segments:
+                cell = self.connections.cell_for_segment(segment)
+                f.write(f"{self.iteration},Phase1,SegmentMatching,{cell},{segment},active_potential_synapses\n")
+
         self.active_segments = set()
         self.matching_segments = set()
 
@@ -97,18 +120,21 @@ class TemporalMemory:
                 self.matching_segments.add(segment)
 
         if learn:
-            # Update "last used" timestamp for learning segments
-            for segment in self.active_segments:
-                self.last_used_iteration_for_segment[segment] = self.iteration
+            for segment in self.matching_segments:
+                if segment not in self.active_segments:
+                    self.connections.adapt_segment(
+                        segment,
+                        prev_active_cells=self.active_cells,
+                        permanence_increment=0.0,
+                        permanence_decrement=self.predicted_segment_decrement
+                    )
+                    with open("results/tm_phase_trace.csv", "a") as f:
+                        f.write(f"{self.iteration},Phase1,PredictedSegmentDecrementApplied,,{segment},failed_prediction\n")
 
 
     def activate_cells(self, active_columns, learn=True):
         """
-        Phase 2: Determine active and winner cells based on active columns.
-
-        Args:
-            active_columns (list of int): Indices of currently active columns.
-            learn (bool): If True, learning updates will be applied.
+        Phase 2: Activate cells based on predictive state or burst if necessary.
         """
         prev_active_cells = self.active_cells.copy()
         prev_winner_cells = self.winner_cells.copy()
@@ -127,46 +153,70 @@ class TemporalMemory:
                 for cell in predictive_cells:
                     self.active_cells.add(cell)
                     self.winner_cells.add(cell)
-
                     if learn:
                         segments = self.connections.segments_for_cell(cell)
                         for segment in segments:
                             if segment in self.active_segments:
                                 self.connections.adapt_segment(
-                                    segment, prev_active_cells, 
+                                    segment, prev_active_cells,
                                     self.permanence_increment, self.permanence_decrement
                                 )
+                                with open(tm_trace_path, "a") as f:
+                                    f.write(f"{self.iteration},Phase2,AdaptSegment,{cell},{segment},predicted\n")
             else:
-                # Bursting Column - No prediction occurred
+                # Bursting Column - No predictions available
                 for cell in self.cells_for_column(column):
                     self.active_cells.add(cell)
 
                 winner_cell = self.select_winner_cell(column)
                 self.winner_cells.add(winner_cell)
 
+                with open(tm_trace_path, "a") as f:
+                    f.write(f"{self.iteration},Phase2,BurstWinnerCell,{winner_cell},,burst\n")
+
                 if learn:
                     matching_segments = self.connections.matching_segments_for_column(
                         column, self.cells_per_column, prev_active_cells, self.min_threshold
-                        )
+                    )
+
                     if matching_segments:
                         best_segment = max(
-                            matching_segments, 
-                            key=lambda s: self.connections.num_active_potential_synapses(
-                                s, prev_active_cells
-                            )
+                            matching_segments,
+                            key=lambda s: self.connections.num_active_potential_synapses(s, prev_active_cells)
                         )
                         self.connections.adapt_segment(
                             best_segment, prev_active_cells,
                             self.permanence_increment, self.permanence_decrement
                         )
+                        with open(tm_trace_path, "a") as f:
+                            f.write(f"{self.iteration},Phase2,AdaptSegment,{winner_cell},{best_segment},burst_matched\n")
                     else:
-                        # Grow new segment
-                        if prev_winner_cells:
-                            new_segment = self.connections.create_segment(winner_cell)
-                            self.connections.grow_synapses(
-                                new_segment, prev_winner_cells, 
-                                self.initial_permanence, self.max_new_synapse_count
-                            )
+                        # Always grow a new segment if no matching segment found!
+                        new_segment = self.connections.create_segment(winner_cell)
+                        self.connections.grow_synapses(
+                            new_segment, prev_winner_cells,
+                            self.initial_permanence, self.max_new_synapse_count
+                        )
+                        with open(tm_trace_path, "a") as f:
+                            f.write(f"{self.iteration},Phase2,SegmentGrown,{winner_cell},{new_segment},new_segment_burst\n")
+
+        segment_log_path = "results/tm_segment_growth_trace.csv"
+        if not os.path.exists(segment_log_path):
+            with open(segment_log_path, "w") as f:
+                f.write("timestep,total_segments,total_synapses,avg_permanence\n")
+
+        # Collect total segments and synapse permanence data
+        total_segments = len(self.connections.segment_to_synapses)
+        all_permanences = [
+            self.connections.synapse_data[synapse_id][1]
+            for synapse_ids in self.connections.segment_to_synapses.values()
+            for synapse_id in synapse_ids
+        ]
+        total_synapses = len(all_permanences)
+        avg_permanence = np.mean(all_permanences) if total_synapses > 0 else 0.0
+
+        with open(segment_log_path, "a") as f:
+            f.write(f"{self.iteration},{total_segments},{total_synapses},{avg_permanence:.4f}\n")
 
 
     def select_winner_cell(self, column):
@@ -204,6 +254,15 @@ class TemporalMemory:
         Returns:
             set of int: Indices of predictive cells.
         """
+        with open("results/tm_phase3_prediction_trace.csv", "a") as f:
+            if self.iteration == 0:  # Write header only once
+                f.write("timestep,predictive_cell,column\n")
+
+            for segment in self.active_segments:
+                cell = self.connections.cell_for_segment(segment)
+                column = self.connections.column_for_cell(cell, self.cells_per_column)
+                f.write(f"{self.iteration},{cell},{column}\n")
+
         predictive_cells = set()
 
         for segment in self.active_segments:

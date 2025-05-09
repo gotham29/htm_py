@@ -3,26 +3,25 @@ import numpy as np
 class MultiEncoder:
     def __init__(self, encoders):
         """
-        encoders: dict of {feature_name: encoder_object}
+        Args:
+            encoders (dict): Mapping from feature name to encoder instances (e.g., RDSE, DateEncoder).
         """
         self.encoders = encoders
-        self.output_width = sum(enc.output_width for enc in encoders.values())
+        self.output_width = sum(encoder.output_width for encoder in encoders.values())
 
-    def encode(self, input_dict):
+    def encode(self, input_data):
         """
-        input_dict: {feature_name: value, ...}
-        Returns a flat SDR vector (numpy array) with all encoded bits.
+        Args:
+            input_data (dict): Mapping from feature name to value.
+
+        Returns:
+            np.array: Concatenated SDR encoding across all features.
         """
-        assert isinstance(input_dict, dict), "Input must be a dict of feature: value"
-        vectors = []
+        encoded_pieces = []
+        for feature, encoder in self.encoders.items():
+            value = input_data.get(feature)
+            if value is None:
+                raise ValueError(f"Missing input value for feature '{feature}'")
+            encoded_pieces.append(encoder.encode(value))
 
-        for key, encoder in self.encoders.items():
-            val = input_dict.get(key)
-            assert val is not None, f"Missing input value for '{key}'"
-            vec = encoder.encode(val)
-            vectors.append(vec)
-
-        return np.concatenate(vectors)
-
-    def getEncodedFeatures(self):
-        return list(self.encoders.keys())
+        return np.concatenate(encoded_pieces)

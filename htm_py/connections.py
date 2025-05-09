@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 class Connections:
@@ -157,16 +158,36 @@ class Connections:
             permanence_increment (float): Increment value for active synapses.
             permanence_decrement (float): Decrement value for inactive synapses.
         """
-        for synapse in self.synapses_for_segment(segment):
-            presynaptic_cell, permanence = self.synapse_data_for(synapse)
-            if presynaptic_cell in prev_active_cells:
-                permanence += permanence_increment
-            else:
-                permanence -= permanence_decrement
 
-            # Clamp permanence between [0.0, 1.0]
-            permanence = min(max(permanence, 0.0), 1.0)
-            self.synapse_data[synapse] = (presynaptic_cell, permanence)
+        debug_log_path = "results/segment_adapt_debug.csv"
+        if not os.path.exists(debug_log_path):
+            with open(debug_log_path, "w") as f:
+                f.write("timestep,segment_id,synapse_id,prev_perm,new_perm,event\n")
+
+        # Inside the synapse loop where permanence is updated:
+        for synapse in self.synapses_for_segment(segment):
+            cell, perm = self.synapse_data[synapse]
+            prev_perm = perm
+            if cell in prev_active_cells:
+                perm = min(1.0, perm + permanence_increment)
+            else:
+                perm = max(0.0, perm - permanence_decrement)
+            self.synapse_data[synapse] = (cell, perm)
+
+            with open(debug_log_path, "a") as f:
+                f.write(f"{self.iteration},{segment},{synapse},{prev_perm:.4f},{perm:.4f},adapted\n")
+
+
+        # for synapse in self.synapses_for_segment(segment):
+        #     presynaptic_cell, permanence = self.synapse_data_for(synapse)
+        #     if presynaptic_cell in prev_active_cells:
+        #         permanence += permanence_increment
+        #     else:
+        #         permanence -= permanence_decrement
+
+        #     # Clamp permanence between [0.0, 1.0]
+        #     permanence = min(max(permanence, 0.0), 1.0)
+        #     self.synapse_data[synapse] = (presynaptic_cell, permanence)
 
 
     def grow_synapses(self, segment, prev_winner_cells, initial_permanence, max_new_synapses):
